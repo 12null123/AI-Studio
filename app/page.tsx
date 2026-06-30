@@ -23,7 +23,9 @@ import {
   ChevronDown,
   Info,
   Key,
-  ShieldAlert
+  ShieldAlert,
+  Download,
+  Upload
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -114,8 +116,33 @@ export default function Home() {
   const isMobile = useIsMobile();
   
   // State
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeId, setActiveId] = useState<string>("");
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("gemini_wrapper_chats");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse localstorage conversations on init:", e);
+      }
+    }
+    return [];
+  });
+
+  const [activeId, setActiveId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const savedActiveId = localStorage.getItem("gemini_active_chat_id");
+      if (savedActiveId) return savedActiveId;
+      try {
+        const saved = localStorage.getItem("gemini_wrapper_chats");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.length > 0) return parsed[0].id;
+        }
+      } catch {}
+    }
+    return "";
+  });
+
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -129,10 +156,25 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState("");
 
   // Custom client-side Gemini API key state
-  const [clientApiKey, setClientApiKey] = useState<string>("");
+  const [clientApiKey, setClientApiKey] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemini_client_api_key") || "";
+    }
+    return "";
+  });
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [tempApiKey, setTempApiKey] = useState("");
   const [showKeyText, setShowKeyText] = useState(false);
+
+  // Floating toast notification state
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const showNotification = (message: string, type: "success" | "error" | "info" = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification(null);
+    }, 4000);
+  };
 
   // Sync tempApiKey when modal opens or key loads
   useEffect(() => {
@@ -168,30 +210,95 @@ export default function Home() {
     }
   ];
 
-  // Load conversations and custom API key from localstorage
+  // Auto-sync conversations changes to localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("gemini_wrapper_chats");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setConversations(parsed);
-        if (parsed.length > 0) {
-          setActiveId(parsed[0].id);
-        }
-      } catch (e) {
-        console.error("Failed to parse localstorage conversations:", e);
-      }
-    }
-    const savedKey = localStorage.getItem("gemini_client_api_key");
-    if (savedKey) {
-      setClientApiKey(savedKey);
-    }
-  }, []);
+    localStorage.setItem("gemini_wrapper_chats", JSON.stringify(conversations));
+  }, [conversations]);
 
-  // Save conversations to localstorage
+  // Auto-sync activeId changes to localStorage
+  useEffect(() => {
+    if (activeId) {
+      localStorage.setItem("gemini_active_chat_id", activeId);
+    } else {
+      localStorage.removeItem("gemini_active_chat_id");
+    }
+  }, [activeId]);
+
+  // Auto-sync clientApiKey changes to localStorage
+  useEffect(() => {
+    if (clientApiKey) {
+      localStorage.setItem("gemini_client_api_key", clientApiKey);
+    } else {
+      localStorage.removeItem("gemini_client_api_key");
+    }
+  }, [clientApiKey]);
+
+  // Export all conversations to a JSON file
+  const exportChats = () => {
+    try {
+      if (conversations.length === 0) {
+        showNotification("No chat history to export.", "info");
+        return;
+      }
+      const dataStr = JSON.stringify(conversations, null, 2);
+      const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `gemini-chats-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      
+      const linkElement = document.createElement("a");
+      linkElement.setAttribute("href", dataUri);
+      linkElement.setAttribute("download", exportFileDefaultName);
+      linkElement.click();
+      showNotification("Chats exported successfully!", "success");
+    } catch (e) {
+      console.error("Failed to export chats:", e);
+      showNotification("Failed to export chats.", "error");
+    }
+  };
+
+  // Import conversations from a JSON file
+  const handleImportChats = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (Array.isArray(parsed)) {
+          // Quick schema validation
+          const isValid = parsed.every(
+            (c) => c && typeof c.id === "string" && typeof c.title === "string" && Array.isArray(c.messages)
+          );
+          if (isValid) {
+            const merged = [...parsed, ...conversations];
+            // Remove duplicates by id
+            const unique = merged.filter(
+              (char, index) => merged.findIndex((item) => item.id === char.id) === index
+            );
+            setConversations(unique);
+            if (unique.length > 0) {
+              setActiveId(unique[0].id);
+            }
+            showNotification(`Imported ${parsed.length} chats successfully!`, "success");
+          } else {
+            showNotification("Invalid file format. Ensure it's a Gemini chat backup.", "error");
+          }
+        } else {
+          showNotification("Backup file format is not an array of chats.", "error");
+        }
+      } catch (err) {
+        console.error("Failed to parse backup file:", err);
+        showNotification("Failed to parse JSON file.", "error");
+      }
+    };
+    fileReader.readAsText(file, "UTF-8");
+    e.target.value = ""; // Reset file input
+  };
+
+  // Save conversations to localstorage (legacy wrapper for other calls)
   const saveToStorage = (updated: Conversation[]) => {
     setConversations(updated);
-    localStorage.setItem("gemini_wrapper_chats", JSON.stringify(updated));
   };
 
   // Auto scroll
@@ -511,8 +618,31 @@ export default function Home() {
 
             {/* Past Chats Scroll Container */}
             <div className="flex-1 overflow-y-auto px-2 space-y-1">
-              <div className="px-2 text-[10px] uppercase tracking-wider text-neutral-500 font-semibold mb-2">
-                Recent Chats
+              <div className="flex items-center justify-between px-2 mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">
+                  Recent Chats
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={exportChats}
+                    className="p-1 hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 rounded-md transition-colors"
+                    title="Export Backup (.json)"
+                  >
+                    <Download size={11} />
+                  </button>
+                  <label
+                    className="p-1 hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 rounded-md transition-colors cursor-pointer"
+                    title="Import Backup (.json)"
+                  >
+                    <Upload size={11} />
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportChats}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
               
               {conversations.length === 0 ? (
@@ -1056,6 +1186,33 @@ export default function Home() {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* 4. Sleek Custom Floating Toast Notification */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
+              notification.type === "success"
+                ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-300"
+                : notification.type === "error"
+                ? "bg-red-950/90 border-red-500/30 text-red-300"
+                : "bg-neutral-900/95 border-neutral-800 text-neutral-300"
+            }`}
+          >
+            <div className={`w-2 h-2 rounded-full ${
+              notification.type === "success" 
+                ? "bg-emerald-400 animate-pulse" 
+                : notification.type === "error" 
+                ? "bg-red-400 animate-pulse" 
+                : "bg-blue-400 animate-pulse"
+            }`} />
+            <span className="text-sm font-medium">{notification.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
