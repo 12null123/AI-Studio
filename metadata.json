@@ -1,0 +1,6 @@
+{
+  "name": "Gemini Web Wrapper",
+  "description": "A sleek, clean, dark-mode web wrapper for the Gemini API featuring chat history and streaming responses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
