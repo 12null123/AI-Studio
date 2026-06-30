@@ -567,7 +567,7 @@ export default function Home() {
                   TN
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-neutral-300 truncate">tweetnull@gmail.com</p>
+                  <p className="text-xs font-semibold text-neutral-300 truncate">OsyDosyGosyNosyBosyZosy/p>
                   <p className="text-[10px] text-neutral-500">Gemini Premium Client</p>
                 </div>
               </div>
