@@ -21,7 +21,9 @@ import {
   Clock,
   ExternalLink,
   ChevronDown,
-  Info
+  Info,
+  Key,
+  ShieldAlert
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -126,6 +128,19 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
 
+  // Custom client-side Gemini API key state
+  const [clientApiKey, setClientApiKey] = useState<string>("");
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState("");
+  const [showKeyText, setShowKeyText] = useState(false);
+
+  // Sync tempApiKey when modal opens or key loads
+  useEffect(() => {
+    if (isKeyModalOpen) {
+      setTempApiKey(clientApiKey);
+    }
+  }, [isKeyModalOpen, clientApiKey]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -153,7 +168,7 @@ export default function Home() {
     }
   ];
 
-  // Load conversations from localstorage
+  // Load conversations and custom API key from localstorage
   useEffect(() => {
     const saved = localStorage.getItem("gemini_wrapper_chats");
     if (saved) {
@@ -166,6 +181,10 @@ export default function Home() {
       } catch (e) {
         console.error("Failed to parse localstorage conversations:", e);
       }
+    }
+    const savedKey = localStorage.getItem("gemini_client_api_key");
+    if (savedKey) {
+      setClientApiKey(savedKey);
     }
   }, []);
 
@@ -312,12 +331,16 @@ export default function Home() {
         body: JSON.stringify({
           messages: updatedMessages,
           useThinking,
-          useSearch
+          useSearch,
+          clientApiKey: clientApiKey || undefined
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (errorData.isKeyMissing) {
+          setIsKeyModalOpen(true);
+        }
         throw new Error(errorData.error || "Failed to fetch response from Gemini.");
       }
 
@@ -562,14 +585,23 @@ export default function Home() {
 
             {/* Sidebar Bottom Footer Info */}
             <div className="p-3 border-t border-neutral-800 bg-[#1e1f20]">
-              <div className="flex items-center gap-3 px-1 py-1.5 rounded-lg">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow">
-                  TN
+              <div className="flex items-center justify-between px-1 py-1.5 rounded-lg">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                    TN
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-neutral-300 truncate">tweetnull@gmail.com</p>
+                    <p className="text-[10px] text-neutral-500">Gemini Client</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-neutral-300 truncate">tweetnull@gmail.com/p>
-                  <p className="text-[10px] text-neutral-500">Gemini Premium Client</p>
-                </div>
+                <button
+                  onClick={() => setIsKeyModalOpen(true)}
+                  className="p-2 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded-lg transition-colors border border-neutral-800/40 hover:border-neutral-700/60 bg-neutral-900/30"
+                  title="Configure Gemini API Key"
+                >
+                  <Settings size={15} />
+                </button>
               </div>
             </div>
           </motion.div>
@@ -679,9 +711,23 @@ export default function Home() {
                 </div>
 
                 {/* Extra Guidance */}
-                <div className="flex items-center gap-2 mt-8 text-xs text-neutral-500 bg-neutral-900/30 px-3.5 py-1.5 rounded-full border border-neutral-800/40 mx-auto">
-                  <Info size={12} className="text-neutral-400" />
-                  <span>Choose Thinking Mode or Google Search from toggles at the bottom</span>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8 mx-auto w-full">
+                  <div className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-900/30 px-3.5 py-1.5 rounded-full border border-neutral-800/40">
+                    <Info size={12} className="text-neutral-400" />
+                    <span>Choose Thinking Mode or Google Search from toggles at the bottom</span>
+                  </div>
+                  
+                  <button
+                    onClick={() => setIsKeyModalOpen(true)}
+                    className={`flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full border transition-all ${
+                      clientApiKey 
+                        ? "bg-emerald-950/20 border-emerald-800/30 text-emerald-400" 
+                        : "bg-amber-950/20 border-amber-850/30 text-amber-400 animate-pulse"
+                    }`}
+                  >
+                    <Key size={11} />
+                    <span>{clientApiKey ? "Custom Key Saved" : "No Key Configured? Click here"}</span>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -912,6 +958,108 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* 3. API Key Configuration Modal */}
+      <AnimatePresence>
+        {isKeyModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-[#1e1f20] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-pink-500 to-amber-400" />
+              
+              <div className="flex items-start gap-4 mb-5">
+                <div className="w-10 h-10 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 flex-shrink-0">
+                  <Key size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Configure Gemini API Key</h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Optionally use your own custom API key. This is safely saved in your browser&apos;s local storage and never exposed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block">
+                    Gemini API Key
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempApiKey}
+                      onChange={(e) => setTempApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-neutral-900/50 border border-neutral-800 focus:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 placeholder-neutral-600 outline-none pr-10 font-mono transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKeyText(!showKeyText)}
+                      className="absolute right-3 text-neutral-400 hover:text-neutral-200 text-xs font-semibold"
+                    >
+                      {showKeyText ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-neutral-900/30 border border-neutral-800/40 rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-neutral-400 leading-relaxed">
+                      If the server has a master key configured (default in Google AI Studio), that key is preferred. When deployed on Vercel or other servers, entering your key here ensures the app works immediately.
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-neutral-500 pl-6">
+                    Don&apos;t have a key? Get one for free at{" "}
+                    <a
+                      href="https://aistudio.google.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      Google AI Studio <ExternalLink size={8} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-neutral-900/80">
+                <button
+                  onClick={() => setIsKeyModalOpen(false)}
+                  className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setClientApiKey(tempApiKey.trim());
+                    if (tempApiKey.trim()) {
+                      localStorage.setItem("gemini_client_api_key", tempApiKey.trim());
+                    } else {
+                      localStorage.removeItem("gemini_client_api_key");
+                    }
+                    setIsKeyModalOpen(false);
+                  }}
+                  className="px-5 py-2 bg-white hover:bg-neutral-100 text-black font-semibold text-sm rounded-xl transition-all shadow-md"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

@@ -5,13 +5,16 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, useThinking, useSearch } = await req.json();
+    const { messages, useThinking, useSearch, clientApiKey } = await req.json();
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || clientApiKey;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY is not configured on the server." },
-        { status: 500 }
+        { 
+          error: "GEMINI_API_KEY is not configured on the server. Please provide a custom Gemini API Key in Settings.",
+          isKeyMissing: true 
+        },
+        { status: 400 }
       );
     }
 
