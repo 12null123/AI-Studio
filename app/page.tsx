@@ -718,10 +718,10 @@ export default function Home() {
               <div className="flex items-center justify-between px-1 py-1.5 rounded-lg">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md">
-                    TN
+                    O
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-neutral-300 truncate">tweetnull@gmail.com</p>
+                    <p className="text-xs font-semibold text-neutral-300 truncate">osydosygosybosynosy</p>
                     <p className="text-[10px] text-neutral-500">Gemini Client</p>
                   </div>
                 </div>
