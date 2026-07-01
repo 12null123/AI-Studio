@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
+import { getStorageManager, StorageKey, AIProvider } from "@/lib/secure-storage/manager";
 import {
   Plus,
   MessageSquare,
@@ -201,33 +202,14 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
 export default function Home() {
   const isMobile = useIsMobile();
   
+  // Storage manager
+  const storageManager = getStorageManager();
+  const [storageReady, setStorageReady] = useState(false);
+  
   // State
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("gemini_wrapper_chats");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse localstorage conversations on init:", e);
-      }
-    }
-    return [];
-  });
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  const [activeId, setActiveId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      const savedActiveId = localStorage.getItem("gemini_active_chat_id");
-      if (savedActiveId) return savedActiveId;
-      try {
-        const saved = localStorage.getItem("gemini_wrapper_chats");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.length > 0) return parsed[0].id;
-        }
-      } catch {}
-    }
-    return "";
-  });
+  const [activeId, setActiveId] = useState<string>("");
 
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -242,37 +224,12 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState("");
 
   // Custom client-side API key states for multi-provider
-  const [clientApiKey, setClientApiKey] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("gemini_client_api_key") || localStorage.getItem("osy_key_google") || "";
-    }
-    return "";
-  });
-  const [clientAnthropicKey, setClientAnthropicKey] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("osy_key_anthropic") || "";
-    }
-    return "";
-  });
-  const [clientOpenaiKey, setClientOpenaiKey] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("osy_key_openai") || "";
-    }
-    return "";
-  });
+  const [clientApiKey, setClientApiKey] = useState<string>("");
+  const [clientAnthropicKey, setClientAnthropicKey] = useState<string>("");
+  const [clientOpenaiKey, setClientOpenaiKey] = useState<string>("");
 
-  const [activeProvider, setActiveProvider] = useState<"google" | "anthropic" | "openai">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("osy_active_provider") as any) || "google";
-    }
-    return "google";
-  });
-  const [activeModelId, setActiveModelId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("osy_active_model_id") || "gemini-3.5-flash";
-    }
-    return "gemini-3.5-flash";
-  });
+  const [activeProvider, setActiveProvider] = useState<"google" | "anthropic" | "openai">("google");
+  const [activeModelId, setActiveModelId] = useState<string>("gemini-3.5-flash");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
@@ -440,58 +397,172 @@ export default function Home() {
     }
   ];
 
-  // Auto-sync conversations changes to localStorage
+  // Initialize storage on mount
   useEffect(() => {
-    localStorage.setItem("gemini_wrapper_chats", JSON.stringify(conversations));
-  }, [conversations]);
+    const initializeStorage = async () => {
+      try {
+        await storageManager.initialize();
+        
+        // Load conversations
+        const savedChats = await storageManager.getAppState(StorageKey.CONVERSATIONS);
+        if (savedChats) {
+          try {
+            setConversations(JSON.parse(savedChats));
+          } catch (e) {
+            console.error("[v0] Failed to parse conversations:", e);
+          }
+        }
+        
+        // Load active chat ID
+        const savedActiveId = await storageManager.getAppState(StorageKey.ACTIVE_CHAT_ID);
+        if (savedActiveId) {
+          setActiveId(savedActiveId);
+        } else if (savedChats) {
+          // Fallback to first chat if no active ID
+          try {
+            const parsed = JSON.parse(savedChats);
+            if (parsed.length > 0) setActiveId(parsed[0].id);
+          } catch {}
+        }
+        
+        // Load API keys
+        const googleKey = await storageManager.getCredential(AIProvider.GOOGLE);
+        if (googleKey) setClientApiKey(googleKey);
+        
+        const anthropicKey = await storageManager.getCredential(AIProvider.ANTHROPIC);
+        if (anthropicKey) setClientAnthropicKey(anthropicKey);
+        
+        const openaiKey = await storageManager.getCredential(AIProvider.OPENAI);
+        if (openaiKey) setClientOpenaiKey(openaiKey);
+        
+        // Load provider and model settings
+        const provider = await storageManager.getAppState(StorageKey.ACTIVE_PROVIDER);
+        if (provider) setActiveProvider(provider as any);
+        
+        const modelId = await storageManager.getAppState(StorageKey.ACTIVE_MODEL_ID);
+        if (modelId) setActiveModelId(modelId);
+        
+        setStorageReady(true);
+        console.log("[v0] Storage initialized successfully");
+      } catch (error) {
+        console.error("[v0] Failed to initialize storage:", error);
+        setStorageReady(true);
+      }
+    };
+    
+    initializeStorage();
+  }, [storageManager]);
 
-  // Auto-sync activeId changes to localStorage
+  // Auto-sync conversations changes to encrypted storage
   useEffect(() => {
-    if (activeId) {
-      localStorage.setItem("gemini_active_chat_id", activeId);
-    } else {
-      localStorage.removeItem("gemini_active_chat_id");
-    }
-  }, [activeId]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        await storageManager.setAppState(StorageKey.CONVERSATIONS, JSON.stringify(conversations));
+      } catch (error) {
+        console.error("[v0] Failed to sync conversations:", error);
+      }
+    };
+    sync();
+  }, [conversations, storageReady, storageManager]);
 
-  // Auto-sync clientApiKey changes to localStorage
+  // Auto-sync activeId changes to encrypted storage
   useEffect(() => {
-    if (clientApiKey) {
-      localStorage.setItem("gemini_client_api_key", clientApiKey);
-      localStorage.setItem("osy_key_google", clientApiKey);
-    } else {
-      localStorage.removeItem("gemini_client_api_key");
-      localStorage.removeItem("osy_key_google");
-    }
-  }, [clientApiKey]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (activeId) {
+          await storageManager.setAppState(StorageKey.ACTIVE_CHAT_ID, activeId);
+        } else {
+          await storageManager.removeAppState(StorageKey.ACTIVE_CHAT_ID);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync activeId:", error);
+      }
+    };
+    sync();
+  }, [activeId, storageReady, storageManager]);
 
+  // Auto-sync clientApiKey changes to encrypted storage
   useEffect(() => {
-    if (clientAnthropicKey) {
-      localStorage.setItem("osy_key_anthropic", clientAnthropicKey);
-    } else {
-      localStorage.removeItem("osy_key_anthropic");
-    }
-  }, [clientAnthropicKey]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (clientApiKey) {
+          await storageManager.setCredential(AIProvider.GOOGLE, clientApiKey);
+        } else {
+          await storageManager.removeCredential(AIProvider.GOOGLE);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync Google key:", error);
+      }
+    };
+    sync();
+  }, [clientApiKey, storageReady, storageManager]);
 
+  // Auto-sync clientAnthropicKey changes to encrypted storage
   useEffect(() => {
-    if (clientOpenaiKey) {
-      localStorage.setItem("osy_key_openai", clientOpenaiKey);
-    } else {
-      localStorage.removeItem("osy_key_openai");
-    }
-  }, [clientOpenaiKey]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (clientAnthropicKey) {
+          await storageManager.setCredential(AIProvider.ANTHROPIC, clientAnthropicKey);
+        } else {
+          await storageManager.removeCredential(AIProvider.ANTHROPIC);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync Anthropic key:", error);
+      }
+    };
+    sync();
+  }, [clientAnthropicKey, storageReady, storageManager]);
 
+  // Auto-sync clientOpenaiKey changes to encrypted storage
   useEffect(() => {
-    if (activeProvider) {
-      localStorage.setItem("osy_active_provider", activeProvider);
-    }
-  }, [activeProvider]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (clientOpenaiKey) {
+          await storageManager.setCredential(AIProvider.OPENAI, clientOpenaiKey);
+        } else {
+          await storageManager.removeCredential(AIProvider.OPENAI);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync OpenAI key:", error);
+      }
+    };
+    sync();
+  }, [clientOpenaiKey, storageReady, storageManager]);
 
+  // Auto-sync activeProvider changes to encrypted storage
   useEffect(() => {
-    if (activeModelId) {
-      localStorage.setItem("osy_active_model_id", activeModelId);
-    }
-  }, [activeModelId]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (activeProvider) {
+          await storageManager.setAppState(StorageKey.ACTIVE_PROVIDER, activeProvider);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync provider:", error);
+      }
+    };
+    sync();
+  }, [activeProvider, storageReady, storageManager]);
+
+  // Auto-sync activeModelId changes to encrypted storage
+  useEffect(() => {
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (activeModelId) {
+          await storageManager.setAppState(StorageKey.ACTIVE_MODEL_ID, activeModelId);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync model ID:", error);
+      }
+    };
+    sync();
+  }, [activeModelId, storageReady, storageManager]);
 
   // Export all conversations to a JSON file
   const exportChats = () => {
@@ -585,28 +656,48 @@ export default function Home() {
 
   // Load saved draft on active conversation switch or initial load
   useEffect(() => {
-    if (typeof window !== "undefined" && activeId) {
-      const savedDraft = localStorage.getItem(`gemini_input_draft_${activeId}`);
-      if (savedDraft !== null) {
-        setInput(savedDraft);
-      } else {
+    if (!storageReady || !activeId) {
+      setInput("");
+      return;
+    }
+    
+    const loadDraft = async () => {
+      try {
+        const draftKey = `gemini_input_draft_${activeId}`;
+        const draft = await storageManager.getAppState(draftKey as any);
+        if (draft) {
+          setInput(draft);
+        } else {
+          setInput("");
+        }
+      } catch (error) {
+        console.error("[v0] Failed to load draft:", error);
         setInput("");
       }
-    } else {
-      setInput("");
-    }
-  }, [activeId]);
+    };
+    
+    loadDraft();
+  }, [activeId, storageReady, storageManager]);
 
-  // Auto-sync input drafts to localStorage
+  // Auto-sync input drafts to encrypted storage
   useEffect(() => {
-    if (typeof window !== "undefined" && activeId) {
-      if (input.trim()) {
-        localStorage.setItem(`gemini_input_draft_${activeId}`, input);
-      } else {
-        localStorage.removeItem(`gemini_input_draft_${activeId}`);
+    if (!storageReady || !activeId) return;
+    
+    const sync = async () => {
+      try {
+        const draftKey = `gemini_input_draft_${activeId}`;
+        if (input.trim()) {
+          await storageManager.setAppState(draftKey as any, input);
+        } else {
+          await storageManager.removeAppState(draftKey as any);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync draft:", error);
       }
-    }
-  }, [input, activeId]);
+    };
+    
+    sync();
+  }, [input, activeId, storageReady, storageManager]);
 
   const activeConversation = conversations.find((c) => c.id === activeId);
 
@@ -863,7 +954,7 @@ export default function Home() {
               }
             : c
         );
-        localStorage.setItem("gemini_wrapper_chats", JSON.stringify(final));
+        // Storage sync happens automatically via useEffect
         return final;
       });
 
@@ -886,7 +977,7 @@ export default function Home() {
               }
             : c
         );
-        localStorage.setItem("gemini_wrapper_chats", JSON.stringify(final));
+        // Storage sync happens automatically via useEffect
         return final;
       });
       
@@ -1770,29 +1861,36 @@ export default function Home() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    // Update state first
                     setClientApiKey(tempGoogleKey.trim());
                     setClientAnthropicKey(tempAnthropicKey.trim());
                     setClientOpenaiKey(tempOpenaiKey.trim());
 
-                    if (tempGoogleKey.trim()) {
-                      localStorage.setItem("gemini_client_api_key", tempGoogleKey.trim());
-                      localStorage.setItem("osy_key_google", tempGoogleKey.trim());
-                    } else {
-                      localStorage.removeItem("gemini_client_api_key");
-                      localStorage.removeItem("osy_key_google");
-                    }
+                    // Storage sync happens automatically via useEffect hooks
+                    // but we explicitly sync here for immediate feedback
+                    try {
+                      if (tempGoogleKey.trim()) {
+                        await storageManager.setCredential(AIProvider.GOOGLE, tempGoogleKey.trim());
+                      } else {
+                        await storageManager.removeCredential(AIProvider.GOOGLE);
+                      }
 
-                    if (tempAnthropicKey.trim()) {
-                      localStorage.setItem("osy_key_anthropic", tempAnthropicKey.trim());
-                    } else {
-                      localStorage.removeItem("osy_key_anthropic");
-                    }
+                      if (tempAnthropicKey.trim()) {
+                        await storageManager.setCredential(AIProvider.ANTHROPIC, tempAnthropicKey.trim());
+                      } else {
+                        await storageManager.removeCredential(AIProvider.ANTHROPIC);
+                      }
 
-                    if (tempOpenaiKey.trim()) {
-                      localStorage.setItem("osy_key_openai", tempOpenaiKey.trim());
-                    } else {
-                      localStorage.removeItem("osy_key_openai");
+                      if (tempOpenaiKey.trim()) {
+                        await storageManager.setCredential(AIProvider.OPENAI, tempOpenaiKey.trim());
+                      } else {
+                        await storageManager.removeCredential(AIProvider.OPENAI);
+                      }
+                    } catch (error) {
+                      console.error("[v0] Failed to save keys:", error);
+                      showNotification("Failed to save vault", "error");
+                      return;
                     }
 
                     setIsKeyModalOpen(false);

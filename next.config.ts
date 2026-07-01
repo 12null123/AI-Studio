@@ -7,9 +7,6 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: false,
-    experimental: {
-    optimizePackageImports: ["lucide-react", "react-icons"],
-    }
   },
   // Allow access to remote image placeholder.
   images: {
