@@ -17,3 +17,46 @@
     transform: translateY(0);
   }
 }
+
+/* Custom premium overlay scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+/* Streaming blinking cursor styling */
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-active-container p:last-child::after,
+.streaming-active-container li:last-child::after {
+  content: '▊';
+  display: inline-block;
+  color: #818cf8; /* Indigo-400 */
+  animation: cursorBlink 0.9s steps(2, start) infinite;
+  margin-left: 5px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+

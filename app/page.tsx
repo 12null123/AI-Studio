@@ -25,7 +25,10 @@ import {
   Key,
   ShieldAlert,
   Download,
-  Upload
+  Upload,
+  FileText,
+  X,
+  Paperclip
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -38,6 +41,7 @@ interface Message {
   content: string;
   sources?: Array<{ title: string; uri: string }>;
   timestamp: number;
+  files?: Array<{ id: string; name: string; size: number; content: string }>;
 }
 
 interface Conversation {
@@ -50,23 +54,31 @@ interface Conversation {
 }
 
 // Spark Icon Component (Google Gemini Diamond Gradient Spark)
-function GeminiSpark({ className = "w-6 h-6", active = false }) {
+interface GeminiSparkProps {
+  className?: string;
+  active?: boolean;
+  mono?: boolean;
+}
+
+function GeminiSpark({ className = "w-6 h-6", active = false, mono = false }: GeminiSparkProps) {
   return (
     <svg viewBox="0 0 24 24" className={`${className} ${active ? 'animate-pulse' : ''}`} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="gemini-spark-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#7a9efd" />
-          <stop offset="35%" stopColor="#a374fc" />
-          <stop offset="70%" stopColor="#f559aa" />
-          <stop offset="100%" stopColor="#ff9a62" />
-        </linearGradient>
-      </defs>
+      {!mono && (
+        <defs>
+          <linearGradient id="gemini-spark-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#7a9efd" />
+            <stop offset="35%" stopColor="#a374fc" />
+            <stop offset="70%" stopColor="#f559aa" />
+            <stop offset="100%" stopColor="#ff9a62" />
+          </linearGradient>
+        </defs>
+      )}
       <path
-        fill="url(#gemini-spark-grad)"
+        fill={mono ? "currentColor" : "url(#gemini-spark-grad)"}
         d="M12 2C12 2 12.3 8.7 13 9.4C13.7 10.1 20.4 10.4 20.4 10.4C20.4 10.4 13.7 10.7 13 11.4C12.3 12.1 12 18.8 12 18.8C12 18.8 11.7 12.1 11 11.4C10.3 10.7 3.6 10.4 3.6 10.4C3.6 10.4 10.3 10.7 11 9.4C11.7 8.7 12 2 12 2Z"
       />
       <path
-        fill="url(#gemini-spark-grad)"
+        fill={mono ? "currentColor" : "url(#gemini-spark-grad)"}
         d="M19 4C19 4 19.15 6.65 19.4 6.9C19.65 7.15 22.3 7.3 22.3 7.3C22.3 7.3 19.65 7.45 19.4 7.7C19.15 7.95 19 10.6 19 10.6C19 10.6 18.85 7.95 18.6 7.7C18.35 7.45 15.7 7.3 15.7 7.3C15.7 7.3 18.35 7.15 18.6 6.9C18.85 6.65 19 4 19 4Z"
         opacity="0.8"
       />
@@ -77,6 +89,7 @@ function GeminiSpark({ className = "w-6 h-6", active = false }) {
 // CodeBlock helper
 function CodeBlock({ language, value }: { language: string; value: string }) {
   const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(value);
@@ -84,28 +97,101 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownload = () => {
+    try {
+      const blob = new Blob([value], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      
+      // Smart language file extension map
+      let extension = "txt";
+      const lang = language.toLowerCase();
+      if (["typescript", "ts", "tsx"].includes(lang)) extension = "tsx";
+      else if (["javascript", "js", "jsx"].includes(lang)) extension = "jsx";
+      else if (["python", "py"].includes(lang)) extension = "py";
+      else if (lang === "html") extension = "html";
+      else if (lang === "css") extension = "css";
+      else if (["rust", "rs"].includes(lang)) extension = "rs";
+      else if (lang === "go") extension = "go";
+      else if (lang === "json") extension = "json";
+      else if (["sh", "bash"].includes(lang)) extension = "sh";
+      else if (lang === "sql") extension = "sql";
+      else if (["markdown", "md"].includes(lang)) extension = "md";
+      else if (["cpp", "c++"].includes(lang)) extension = "cpp";
+      else if (lang === "c") extension = "c";
+      else if (["yaml", "yml"].includes(lang)) extension = "yml";
+      
+      a.download = `workspace_file.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      setDownloaded(true);
+      setTimeout(() => setDownloaded(false), 2000);
+    } catch (err) {
+      console.error("Failed to download file directly:", err);
+    }
+  };
+
+  const displayLanguage = language ? language.toUpperCase() : "CODE";
+
   return (
-    <div className="my-4 rounded-xl border border-neutral-800 bg-[#0e0e10] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#1e1f20] border-b border-neutral-800 text-xs font-mono text-neutral-400">
-        <span>{language}</span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 hover:text-white transition-colors"
-        >
-          {copied ? (
-            <>
-              <Check size={14} className="text-emerald-400" />
-              <span className="text-emerald-400">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy size={14} />
-              <span>Copy code</span>
-            </>
-          )}
-        </button>
+    <div className="group/code my-5 rounded-2xl border border-white/[0.04] bg-[#09090b]/90 overflow-hidden shadow-2xl backdrop-blur-sm transition-all duration-300 hover:border-white/[0.08]">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0f0f11] border-b border-b-white/[0.03] text-xs font-mono text-neutral-400 select-none">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/30" />
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/30" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/30" />
+          </div>
+          <span className="ml-2 font-bold text-zinc-500 text-[10px] tracking-widest">{displayLanguage}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Direct download button visible on hover/regularly */}
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1.5 text-neutral-500 hover:text-neutral-200 transition-all py-0.5 px-2 rounded-md hover:bg-white/[0.03] active:scale-95 duration-200 opacity-80 group-hover/code:opacity-100"
+            title="Download snippet as file"
+          >
+            {downloaded ? (
+              <>
+                <Check size={11} className="text-emerald-400 animate-scale-up" />
+                <span className="text-emerald-400 font-semibold text-[10px] uppercase tracking-wider">Saved!</span>
+              </>
+            ) : (
+              <>
+                <Download size={11} />
+                <span className="text-[10px] font-semibold uppercase tracking-wider">Download</span>
+              </>
+            )}
+          </button>
+
+          <span className="h-3 w-[1px] bg-white/[0.06]" />
+
+          {/* Copy code button */}
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 hover:text-white text-neutral-500 transition-colors py-0.5 px-2 rounded-md hover:bg-white/[0.03] active:scale-95 duration-200"
+            title="Copy to clipboard"
+          >
+            {copied ? (
+              <>
+                <Check size={11} className="text-emerald-400 animate-scale-up" />
+                <span className="text-emerald-400 font-semibold text-[10px] uppercase tracking-wider">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy size={11} />
+                <span className="text-[10px] font-semibold uppercase tracking-wider">Copy</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
-      <div className="p-4 overflow-x-auto font-mono text-sm text-neutral-200 leading-6">
+      <div className="p-4.5 overflow-x-auto font-mono text-[13px] text-neutral-300 leading-relaxed bg-[#060607]/40">
         <pre><code>{value}</code></pre>
       </div>
     </div>
@@ -149,21 +235,50 @@ export default function Home() {
   
   // Quick settings toggles (applies to the next prompt)
   const [useThinking, setUseThinking] = useState(false);
-  const [useSearch, setUseSearch] = useState(false);
+  const useSearch = false;
   
   // Editing a past chat title
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
 
-  // Custom client-side Gemini API key state
+  // Custom client-side API key states for multi-provider
   const [clientApiKey, setClientApiKey] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("gemini_client_api_key") || "";
+      return localStorage.getItem("gemini_client_api_key") || localStorage.getItem("osy_key_google") || "";
     }
     return "";
   });
+  const [clientAnthropicKey, setClientAnthropicKey] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("osy_key_anthropic") || "";
+    }
+    return "";
+  });
+  const [clientOpenaiKey, setClientOpenaiKey] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("osy_key_openai") || "";
+    }
+    return "";
+  });
+
+  const [activeProvider, setActiveProvider] = useState<"google" | "anthropic" | "openai">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("osy_active_provider") as any) || "google";
+    }
+    return "google";
+  });
+  const [activeModelId, setActiveModelId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("osy_active_model_id") || "gemini-3.5-flash";
+    }
+    return "gemini-3.5-flash";
+  });
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
-  const [tempApiKey, setTempApiKey] = useState("");
+  const [tempGoogleKey, setTempGoogleKey] = useState("");
+  const [tempAnthropicKey, setTempAnthropicKey] = useState("");
+  const [tempOpenaiKey, setTempOpenaiKey] = useState("");
   const [showKeyText, setShowKeyText] = useState(false);
 
   // Floating toast notification state
@@ -176,12 +291,127 @@ export default function Home() {
     }, 4000);
   };
 
-  // Sync tempApiKey when modal opens or key loads
+  // Claude-style attached files state
+  interface PastedFile {
+    id: string;
+    name: string;
+    content: string;
+    size: number;
+  }
+  const [attachedFiles, setAttachedFiles] = useState<PastedFile[]>([]);
+
+  // Format file size nicely
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    return `${(kb / 1024).toFixed(1)} MB`;
+  };
+
+  // Get active model display name
+  const getActiveModelName = () => {
+    if (activeProvider === "google") {
+      return useThinking ? "Gemini 3.1 Pro" : "Gemini 3.5 Flash";
+    }
+    if (activeProvider === "anthropic") {
+      return "Claude 3.7 Sonnet";
+    }
+    if (activeProvider === "openai") {
+      return "GPT-4o";
+    }
+    return "Gemini 3.5 Flash";
+  };
+
+  // Strip XML documents from content to display only the user prompt text
+  const getPromptTextOnly = (content: string) => {
+    return content.replace(/<document name="[^"]*">[\s\S]*?<\/document>/g, "").trim();
+  };
+
+  // Claude-style paste interceptor
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+    if (pastedText && pastedText.length >= 1200) {
+      e.preventDefault(); // Stop from inserting into textarea
+      
+      const newFileId = Math.random().toString(36).substring(7);
+      
+      // Deduce a clean title from the first line, falling back to "Pasted Text"
+      let title = "Pasted Text";
+      const firstLine = pastedText.split("\n")[0].trim().substring(0, 30);
+      if (firstLine && firstLine.length > 3) {
+        const sanitized = firstLine.replace(/[^a-zA-Z0-9\s-_]/g, "").trim();
+        if (sanitized) {
+          title = sanitized;
+        }
+      }
+      
+      const newFile: PastedFile = {
+        id: newFileId,
+        name: `${title}.txt`,
+        content: pastedText,
+        size: pastedText.length
+      };
+      
+      setAttachedFiles((prev) => [...prev, newFile]);
+      showNotification(`Large text auto-converted to document: ${newFile.name}`, "info");
+    }
+  };
+
+  // Custom file upload handler for text/code files
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check if it's text or code
+    const isTextLike = 
+      file.type.startsWith("text/") || 
+      file.name.endsWith(".txt") || 
+      file.name.endsWith(".js") || 
+      file.name.endsWith(".jsx") || 
+      file.name.endsWith(".ts") || 
+      file.name.endsWith(".tsx") || 
+      file.name.endsWith(".json") || 
+      file.name.endsWith(".css") || 
+      file.name.endsWith(".md") || 
+      file.name.endsWith(".html") ||
+      file.name.endsWith(".py") ||
+      file.name.endsWith(".java") ||
+      file.name.endsWith(".cpp") ||
+      file.name.endsWith(".c") ||
+      file.name.endsWith(".rs") ||
+      file.name.endsWith(".sh") ||
+      file.name.endsWith(".yml") ||
+      file.name.endsWith(".yaml");
+
+    if (!isTextLike) {
+      showNotification("Please select a text or code document (e.g. .txt, .js, .ts, .json, .py, etc.)", "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const newFile: PastedFile = {
+        id: Math.random().toString(36).substring(7),
+        name: file.name,
+        content: content,
+        size: file.size
+      };
+      setAttachedFiles((prev) => [...prev, newFile]);
+      showNotification(`Document attached: ${file.name}`, "success");
+    };
+    reader.readAsText(file);
+    e.target.value = ""; // Reset input
+  };
+
+  // Sync temp keys when modal opens
   useEffect(() => {
     if (isKeyModalOpen) {
-      setTempApiKey(clientApiKey);
+      setTempGoogleKey(clientApiKey);
+      setTempAnthropicKey(clientAnthropicKey);
+      setTempOpenaiKey(clientOpenaiKey);
     }
-  }, [isKeyModalOpen, clientApiKey]);
+  }, [isKeyModalOpen, clientApiKey, clientAnthropicKey, clientOpenaiKey]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -191,22 +421,22 @@ export default function Home() {
     {
       category: "Help me write",
       text: "a professional email explaining a delayed deployment",
-      icon: <Sparkles className="w-4 h-4 text-pink-400" />
+      icon: <Sparkles className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors duration-300" />
     },
     {
       category: "Brainstorm ideas",
       text: "for a sleek Next.js portfolio website layout",
-      icon: <Globe className="w-4 h-4 text-blue-400" />
+      icon: <Globe className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors duration-300" />
     },
     {
       category: "Explain concepts",
       text: "quantum computing in simple analogies for a 5-year-old",
-      icon: <HelpCircle className="w-4 h-4 text-emerald-400" />
+      icon: <HelpCircle className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors duration-300" />
     },
     {
       category: "Debug my code",
       text: "analyze and optimize a React useEffect loop",
-      icon: <Search className="w-4 h-4 text-amber-400" />
+      icon: <Search className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors duration-300" />
     }
   ];
 
@@ -228,10 +458,40 @@ export default function Home() {
   useEffect(() => {
     if (clientApiKey) {
       localStorage.setItem("gemini_client_api_key", clientApiKey);
+      localStorage.setItem("osy_key_google", clientApiKey);
     } else {
       localStorage.removeItem("gemini_client_api_key");
+      localStorage.removeItem("osy_key_google");
     }
   }, [clientApiKey]);
+
+  useEffect(() => {
+    if (clientAnthropicKey) {
+      localStorage.setItem("osy_key_anthropic", clientAnthropicKey);
+    } else {
+      localStorage.removeItem("osy_key_anthropic");
+    }
+  }, [clientAnthropicKey]);
+
+  useEffect(() => {
+    if (clientOpenaiKey) {
+      localStorage.setItem("osy_key_openai", clientOpenaiKey);
+    } else {
+      localStorage.removeItem("osy_key_openai");
+    }
+  }, [clientOpenaiKey]);
+
+  useEffect(() => {
+    if (activeProvider) {
+      localStorage.setItem("osy_active_provider", activeProvider);
+    }
+  }, [activeProvider]);
+
+  useEffect(() => {
+    if (activeModelId) {
+      localStorage.setItem("osy_active_model_id", activeModelId);
+    }
+  }, [activeModelId]);
 
   // Export all conversations to a JSON file
   const exportChats = () => {
@@ -323,6 +583,31 @@ export default function Home() {
     }
   }, [input]);
 
+  // Load saved draft on active conversation switch or initial load
+  useEffect(() => {
+    if (typeof window !== "undefined" && activeId) {
+      const savedDraft = localStorage.getItem(`gemini_input_draft_${activeId}`);
+      if (savedDraft !== null) {
+        setInput(savedDraft);
+      } else {
+        setInput("");
+      }
+    } else {
+      setInput("");
+    }
+  }, [activeId]);
+
+  // Auto-sync input drafts to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined" && activeId) {
+      if (input.trim()) {
+        localStorage.setItem(`gemini_input_draft_${activeId}`, input);
+      } else {
+        localStorage.removeItem(`gemini_input_draft_${activeId}`);
+      }
+    }
+  }, [input, activeId]);
+
   const activeConversation = conversations.find((c) => c.id === activeId);
 
   // Create conversation
@@ -375,23 +660,57 @@ export default function Home() {
   // Submit message
   const handleSendMessage = async (customPrompt?: string) => {
     const promptText = (customPrompt || input).trim();
-    if (!promptText || isStreaming) return;
+    if ((!promptText && attachedFiles.length === 0) || isStreaming) return;
 
     // Reset standard input
     if (!customPrompt) setInput("");
 
+    // Use attached files if they exist and this is a user input submission (not starter prompt)
+    const filesToSend = customPrompt ? [] : [...attachedFiles];
+    if (!customPrompt) setAttachedFiles([]);
+
     let currentConv = activeConversation;
+    let localConversations = [...conversations];
+
     // Create new chat if none exists or active conversation has been deleted
     if (!currentConv || !activeId) {
-      const generatedTitle = promptText.length > 24 ? promptText.substring(0, 24) + "..." : promptText;
-      currentConv = createNewChat(generatedTitle);
+      const displayTitle = promptText 
+        ? (promptText.length > 24 ? promptText.substring(0, 24) + "..." : promptText)
+        : (filesToSend.length > 0 ? filesToSend[0].name : "New chat");
+      
+      const newId = Math.random().toString(36).substring(7);
+      const newConv: Conversation = {
+        id: newId,
+        title: displayTitle,
+        messages: [],
+        useThinking,
+        useSearch,
+        createdAt: Date.now()
+      };
+      
+      localConversations = [newConv, ...localConversations];
+      currentConv = newConv;
+      setActiveId(newId);
+    }
+
+    // Format content with attachments if any
+    let apiContent = promptText;
+    if (filesToSend.length > 0) {
+      const attachmentsText = filesToSend.map(file => 
+        `<document name="${file.name}">\n${file.content}\n</document>`
+      ).join("\n\n");
+      
+      apiContent = promptText 
+        ? `${promptText}\n\n${attachmentsText}`
+        : `Please analyze the attached document:\n\n${attachmentsText}`;
     }
 
     // Add user message to state
     const userMessage: Message = {
       id: Math.random().toString(36).substring(7),
       role: "user",
-      content: promptText,
+      content: apiContent,
+      files: filesToSend.length > 0 ? filesToSend : undefined,
       timestamp: Date.now()
     };
 
@@ -405,10 +724,13 @@ export default function Home() {
 
     // Update conversation title if it was "New chat"
     if (currentConv.title === "New chat") {
-      updatedConv.title = promptText.length > 24 ? promptText.substring(0, 24) + "..." : promptText;
+      const displayTitle = promptText 
+        ? (promptText.length > 24 ? promptText.substring(0, 24) + "..." : promptText)
+        : (filesToSend.length > 0 ? filesToSend[0].name : "New chat");
+      updatedConv.title = displayTitle;
     }
 
-    const nextConversations = conversations.map((c) =>
+    const nextConversations = localConversations.map((c) =>
       c.id === updatedConv.id ? updatedConv : c
     );
     saveToStorage(nextConversations);
@@ -432,6 +754,12 @@ export default function Home() {
     setConversations(conversationsWithAssistant);
 
     try {
+      const userApiKey = activeProvider === "google"
+        ? (clientApiKey || undefined)
+        : activeProvider === "anthropic"
+        ? (clientAnthropicKey || undefined)
+        : (clientOpenaiKey || undefined);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -439,7 +767,10 @@ export default function Home() {
           messages: updatedMessages,
           useThinking,
           useSearch,
-          clientApiKey: clientApiKey || undefined
+          clientApiKey: clientApiKey || undefined,
+          provider: activeProvider,
+          modelId: activeModelId,
+          userApiKey
         })
       });
 
@@ -448,7 +779,7 @@ export default function Home() {
         if (errorData.isKeyMissing) {
           setIsKeyModalOpen(true);
         }
-        throw new Error(errorData.error || "Failed to fetch response from Gemini.");
+        throw new Error(errorData.error || "Failed to fetch response from the AI provider.");
       }
 
       const reader = response.body?.getReader();
@@ -558,6 +889,12 @@ export default function Home() {
         localStorage.setItem("gemini_wrapper_chats", JSON.stringify(final));
         return final;
       });
+      
+      // Restore draft to input textarea to prevent total system wipe on failures
+      if (!customPrompt) {
+        setInput(promptText);
+        showNotification("Draft restored. Connection issue encountered.", "error");
+      }
     } finally {
       setIsStreaming(false);
     }
@@ -572,7 +909,7 @@ export default function Home() {
   };
 
   return (
-    <div id="app-root" className="flex h-screen w-screen overflow-hidden bg-[#131314] text-neutral-200 font-sans">
+    <div id="app-root" className="flex h-screen w-screen overflow-hidden bg-[#070709] text-neutral-200 font-sans">
       
       {/* 1. Collapsible Sidebar */}
       <AnimatePresence initial={false}>
@@ -582,56 +919,54 @@ export default function Home() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: isMobile ? "100%" : 288, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className={`flex-shrink-0 h-full bg-[#1e1f20] border-r border-neutral-800/50 flex flex-col z-30 ${
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className={`flex-shrink-0 h-full bg-[#08080a]/98 border-r border-white/[0.04] backdrop-blur-2xl flex flex-col z-30 ${
               isMobile ? "absolute inset-y-0 left-0" : "relative"
             }`}
           >
             {/* Sidebar Header */}
-            <div className="h-16 px-4 flex items-center justify-between">
-              <span className="text-sm font-semibold tracking-wide text-neutral-300 flex items-center gap-2">
-                <GeminiSpark className="w-5 h-5" /> Gemini Wrapper
-              </span>
+            <div className="h-16 px-5 flex items-center justify-between border-b border-white/[0.02]">
+              <div className="flex items-center gap-1.5 select-none">
+                <span className="text-[10px] tracking-[0.2em] uppercase font-bold text-zinc-500 flex items-center gap-2">
+                  <GeminiSpark className="w-3.5 h-3.5 text-zinc-500" mono={true} /> Gemini Workspace
+                </span>
+                <button
+                  onClick={() => {
+                    createNewChat();
+                    if (isMobile) setIsSidebarOpen(false);
+                  }}
+                  className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors flex items-center justify-center rounded-md"
+                  title="New Thread"
+                >
+                  <Plus size={13} strokeWidth={2.5} />
+                </button>
+              </div>
               
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
+                className="p-1.5 hover:bg-white/[0.04] rounded-lg transition-all text-neutral-500 hover:text-neutral-200"
                 title="Collapse sidebar"
               >
-                <ChevronLeft size={18} />
-              </button>
-            </div>
-
-            {/* New Chat Button */}
-            <div className="px-3 mb-4">
-              <button
-                onClick={() => {
-                  createNewChat();
-                  if (isMobile) setIsSidebarOpen(false);
-                }}
-                className="w-full h-11 bg-neutral-800 hover:bg-neutral-700/80 border border-neutral-700/30 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-neutral-200 transition-all shadow-sm"
-              >
-                <Plus size={16} />
-                <span>New Chat</span>
+                <ChevronLeft size={15} />
               </button>
             </div>
 
             {/* Past Chats Scroll Container */}
-            <div className="flex-1 overflow-y-auto px-2 space-y-1">
-              <div className="flex items-center justify-between px-2 mb-2">
-                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">
-                  Recent Chats
+            <div className="flex-1 overflow-y-auto px-2 pt-4 space-y-1 scrollbar-thin scrollbar-thumb-white/[0.02]">
+              <div className="flex items-center justify-between px-3 mb-2.5 mt-2">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                  Recent Threads
                 </span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={exportChats}
-                    className="p-1 hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 rounded-md transition-colors"
+                    className="p-1 hover:bg-white/[0.04] text-neutral-500 hover:text-neutral-300 rounded-lg transition-colors"
                     title="Export Backup (.json)"
                   >
                     <Download size={11} />
                   </button>
                   <label
-                    className="p-1 hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 rounded-md transition-colors cursor-pointer"
+                    className="p-1 hover:bg-white/[0.04] text-neutral-500 hover:text-neutral-300 rounded-lg transition-colors cursor-pointer"
                     title="Import Backup (.json)"
                   >
                     <Upload size={11} />
@@ -646,8 +981,8 @@ export default function Home() {
               </div>
               
               {conversations.length === 0 ? (
-                <div className="px-3 py-6 text-xs text-neutral-500 italic text-center">
-                  No recent chat history.
+                <div className="px-3 py-8 text-xs text-neutral-600 italic text-center font-medium">
+                  No active threads
                 </div>
               ) : (
                 conversations.map((conv) => {
@@ -661,13 +996,17 @@ export default function Home() {
                         setActiveId(conv.id);
                         if (isMobile) setIsSidebarOpen(false);
                       }}
-                      className={`group relative h-10 px-3 rounded-xl flex items-center gap-2.5 cursor-pointer text-sm transition-all ${
+                      className={`group relative h-10 px-3.5 mx-1 rounded-xl flex items-center gap-3 cursor-pointer text-xs transition-all ${
                         isActive
-                          ? "bg-neutral-800 text-white"
-                          : "text-neutral-400 hover:bg-neutral-800/40 hover:text-neutral-200"
+                          ? "bg-white/[0.04] border border-white/[0.03] text-white shadow-md shadow-black/20"
+                          : "text-neutral-400 hover:bg-white/[0.015] hover:text-neutral-200 border border-transparent"
                       }`}
                     >
-                      <MessageSquare size={15} className="flex-shrink-0 text-neutral-500 group-hover:text-neutral-400" />
+                      {isActive && (
+                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-md bg-gradient-to-b from-indigo-500 to-purple-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse" />
+                      )}
+
+                      <MessageSquare size={13.5} className={`flex-shrink-0 transition-colors ${isActive ? "text-indigo-400" : "text-neutral-500 group-hover:text-neutral-400"}`} />
                       
                       {isEditing ? (
                         <input
@@ -680,30 +1019,32 @@ export default function Home() {
                           }}
                           onClick={(e) => e.stopPropagation()}
                           autoFocus
-                          className="flex-1 bg-neutral-900 border border-blue-500 text-white text-xs px-1.5 py-0.5 rounded outline-none"
+                          className="flex-1 bg-neutral-900/80 border border-white/[0.08] text-white text-xs px-1.5 py-0.5 rounded outline-none font-medium"
                         />
                       ) : (
-                        <span className="flex-1 truncate font-normal leading-none pr-12">
+                        <span className="flex-1 truncate font-medium leading-none pr-10">
                           {conv.title}
                         </span>
                       )}
 
                       {/* Hover action buttons */}
                       {!isEditing && (
-                        <div className="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-gradient-to-l from-[#1e1f20] group-hover:from-neutral-800 pl-4 h-full">
+                        <div className={`absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-gradient-to-l pl-4 h-full transition-all duration-150 ${
+                          isActive ? "from-[#111113] to-transparent" : "from-[#0a0a0c] to-transparent"
+                        }`}>
                           <button
                             onClick={(e) => startRename(conv.id, conv.title, e)}
-                            className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-white"
+                            className="p-1 hover:bg-white/[0.05] rounded text-neutral-400 hover:text-white transition-colors"
                             title="Rename"
                           >
-                            <Edit2 size={12} />
+                            <Edit2 size={11} />
                           </button>
                           <button
                             onClick={(e) => deleteChat(conv.id, e)}
-                            className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+                            className="p-1 hover:bg-white/[0.05] rounded text-neutral-400 hover:text-rose-400 transition-colors"
                             title="Delete"
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={11} />
                           </button>
                         </div>
                       )}
@@ -714,23 +1055,44 @@ export default function Home() {
             </div>
 
             {/* Sidebar Bottom Footer Info */}
-            <div className="p-3 border-t border-neutral-800 bg-[#1e1f20]">
-              <div className="flex items-center justify-between px-1 py-1.5 rounded-lg">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md">
-                    O
+            <div className="p-3 border-t border-white/[0.02] bg-[#08080a] flex flex-col gap-2">
+              {!clientApiKey ? (
+                <div className="flex items-center justify-between px-3 py-2 border border-red-900/50 bg-red-950/15 text-red-400 text-[11px] font-medium rounded-lg select-none">
+                  <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    Sandbox Connection
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-red-400/80">1 Issue</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-3 py-2 border border-emerald-900/40 bg-emerald-950/10 text-emerald-400 text-[11px] font-medium rounded-lg select-none">
+                  <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
+                    Production Active
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Verified</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between p-2 rounded-xl border border-white/[0.03] bg-white/[0.01]">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center font-bold text-white text-xs shadow-[0_0_10px_rgba(139,92,246,0.2)] flex-shrink-0 select-none">
+                    G
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-neutral-300 truncate">osydosygosybosynosy</p>
-                    <p className="text-[10px] text-neutral-500">Gemini Client</p>
+                    <p className="text-[11px] font-bold text-neutral-200 truncate">Private Session</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
+                      <span className="text-[9px] text-neutral-500 font-semibold tracking-wider uppercase">Secure Link</span>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsKeyModalOpen(true)}
-                  className="p-2 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded-lg transition-colors border border-neutral-800/40 hover:border-neutral-700/60 bg-neutral-900/30"
+                  className="p-2 hover:bg-white/[0.05] text-neutral-400 hover:text-white rounded-lg transition-colors border border-white/[0.03] bg-white/[0.01]"
                   title="Configure Gemini API Key"
                 >
-                  <Settings size={15} />
+                  <Settings size={14} />
                 </button>
               </div>
             </div>
@@ -739,100 +1101,208 @@ export default function Home() {
       </AnimatePresence>
 
       {/* 2. Main Chat Workspace */}
-      <div id="main-workspace" className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#131314]">
+      <div id="main-workspace" className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#070709] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900/10 via-zinc-950/20 to-[#070709]">
+        
+        {/* Advanced Ambient Spotlight Gradients (Neon Nebula Glows) */}
+        <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-600/5 rounded-full blur-[140px] pointer-events-none select-none z-0" />
+        <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[120px] pointer-events-none select-none z-0" />
+        <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-pink-600/3 rounded-full blur-[100px] pointer-events-none select-none z-0" />
         
         {/* Floating Sidebar Toggle when hidden */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-4 left-4 p-2 bg-[#1e1f20]/90 hover:bg-neutral-800 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white z-20 shadow-lg transition-all"
+            className="absolute top-4 left-4 p-2 bg-[#0d0d11]/80 hover:bg-[#161620] border border-white/[0.04] rounded-xl text-neutral-400 hover:text-white z-20 shadow-xl backdrop-blur-md transition-all duration-200 active:scale-95"
             title="Expand sidebar"
           >
-            <Menu size={18} />
+            <Menu size={16} />
           </button>
         )}
 
         {/* Workspace Top Header */}
-        <header className="h-16 px-4 flex items-center justify-between border-b border-neutral-900/40 bg-[#131314]/90 backdrop-blur z-10">
+        <header className="h-16 px-6 flex items-center justify-between border-b border-white/[0.04] bg-[#08080a]/80 backdrop-blur-2xl z-20 select-none">
           <div className="flex items-center gap-3">
             {/* Spacer for toggle if sidebar is closed */}
             {!isSidebarOpen && <div className="w-10 h-10" />}
             
             {/* Model Display Selector */}
-            <div className="flex items-center gap-1.5 bg-[#1e1f20] hover:bg-neutral-800 px-3.5 py-1.5 rounded-full border border-neutral-800/30 text-xs font-medium text-neutral-200 cursor-pointer select-none">
-              <GeminiSpark className="w-3.5 h-3.5" active={isStreaming} />
-              <span>{useThinking ? "Gemini 3.1 Pro (Thinking)" : "Gemini 3.5 Flash"}</span>
-              <ChevronDown size={12} className="text-neutral-400 ml-0.5" />
+            <div className="relative">
+              <div 
+                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                className="flex items-center gap-2 bg-white/[0.015] hover:bg-white/[0.04] px-3.5 py-1.5 rounded-full border border-white/[0.03] text-[11px] font-semibold tracking-wide text-zinc-300 hover:text-white cursor-pointer transition-all duration-200 active:scale-95"
+              >
+                <GeminiSpark className="w-3.5 h-3.5" active={isStreaming} />
+                <span>{getActiveModelName()}</span>
+                <ChevronDown size={11} className="text-zinc-500 ml-0.5" />
+              </div>
+
+              {isModelDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setIsModelDropdownOpen(false)} />
+                  <div className="absolute left-0 mt-2 w-56 rounded-2xl border border-white/[0.04] bg-[#0c0c0e]/95 backdrop-blur-xl p-2.5 shadow-2xl z-40 select-none animate-scale-up">
+                    <div className="px-2.5 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-white/[0.02] mb-1.5">
+                      Select AI Intelligence
+                    </div>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => {
+                          setActiveProvider("google");
+                          setActiveModelId("gemini-3.5-flash");
+                          setUseThinking(false);
+                          setIsModelDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                          activeProvider === "google" && !useThinking
+                            ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/10"
+                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "google" && !useThinking ? "bg-indigo-400" : "bg-transparent"}`} />
+                          <span>Gemini 3.5 Flash</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-600 font-mono">GOOGLE</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveProvider("google");
+                          setActiveModelId("gemini-3.1-pro-preview");
+                          setUseThinking(true);
+                          setIsModelDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                          activeProvider === "google" && useThinking
+                            ? "bg-purple-500/10 text-purple-400 border border-purple-500/10"
+                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "google" && useThinking ? "bg-purple-400" : "bg-transparent"}`} />
+                          <span>Gemini 3.1 Pro (Thinking)</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-600 font-mono">GOOGLE</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveProvider("anthropic");
+                          setActiveModelId("claude-3-7-sonnet");
+                          setUseThinking(false);
+                          setIsModelDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                          activeProvider === "anthropic"
+                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/10"
+                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "anthropic" ? "bg-amber-400" : "bg-transparent"}`} />
+                          <span>Claude 3.7 Sonnet</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-600 font-mono">BYOK</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveProvider("openai");
+                          setActiveModelId("gpt-4o");
+                          setUseThinking(false);
+                          setIsModelDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                          activeProvider === "openai"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/10"
+                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "openai" ? "bg-emerald-400" : "bg-transparent"}`} />
+                          <span>GPT-4o</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-600 font-mono">BYOK</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             {/* Grounding & Thinking State indicator lamps */}
             <div className="hidden sm:flex items-center gap-2">
-              <div
-                onClick={() => setUseThinking(!useThinking)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                  useThinking
-                    ? "bg-purple-950/40 border border-purple-800/60 text-purple-300"
-                    : "bg-neutral-900 border border-neutral-800/50 text-neutral-500 hover:text-neutral-400"
-                }`}
-              >
-                <Sparkles size={11} />
-                <span>Thinking</span>
-              </div>
-              <div
-                onClick={() => setUseSearch(!useSearch)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                  useSearch
-                    ? "bg-blue-950/40 border border-blue-800/60 text-blue-300"
-                    : "bg-neutral-900 border border-neutral-800/50 text-neutral-500 hover:text-neutral-400"
-                }`}
-              >
-                <Globe size={11} />
-                <span>Search</span>
-              </div>
+              {activeProvider === "google" ? (
+                <button
+                  onClick={() => {
+                    const newThinking = !useThinking;
+                    setUseThinking(newThinking);
+                    if (newThinking) {
+                      setActiveModelId("gemini-3.1-pro-preview");
+                    } else {
+                      setActiveModelId("gemini-3.5-flash");
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                    useThinking
+                      ? "bg-purple-950/20 border-purple-500/20 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.08)]"
+                      : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                  }`}
+                  title="Toggle Deep Thinking Mode (Gemini 3.1 Pro)"
+                >
+                  <Sparkles size={11} className={useThinking ? "text-purple-400" : ""} />
+                  <span>Thinking</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/[0.03] bg-white/[0.015] text-zinc-500">
+                  <span>BYOK Active</span>
+                </div>
+              )}
             </div>
 
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md">
-              TN
+            <div className="w-7 h-7 rounded-full bg-zinc-900 border border-white/[0.08] flex items-center justify-center font-bold text-zinc-400 text-[10px] select-none shadow-sm">
+              P
             </div>
           </div>
         </header>
 
         {/* Chat Scrolling Area */}
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-3xl mx-auto w-full h-full flex flex-col justify-between">
+        <main className="flex-1 overflow-y-auto py-6 z-10 scrollbar-thin scrollbar-thumb-white/[0.02]">
+          <div className="max-w-3xl mx-auto w-full h-full flex flex-col justify-between px-6">
             
             {/* If no active conversation or no messages, show Bento landing welcome page */}
             {!activeConversation || activeConversation.messages.length === 0 ? (
-              <div className="my-auto flex flex-col items-start pt-10 pb-6 w-full animate-fade-in">
+              <div className="my-auto flex flex-col items-start pt-10 pb-24 w-full animate-fade-in z-10">
                 
-                {/* Greeting */}
-                <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight mb-2 bg-gradient-to-r from-blue-400 via-pink-400 to-amber-300 bg-clip-text text-transparent">
-                  Hello, tweetnull
-                </h1>
-                <h2 className="text-3xl sm:text-4xl font-medium tracking-tight text-neutral-400 mb-12">
-                  How can I help you today?
-                </h2>
+                 {/* Greeting */}
+                <div className="mb-10 select-none">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-500 block mb-2">
+                    Initialize Session
+                  </span>
+                  <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight leading-tight bg-gradient-to-b from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent">
+                    Workspace Console
+                  </h1>
+                </div>
 
                 {/* Suggested Prompts Bento Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 w-full mt-2">
                   {suggestedPrompts.map((p, idx) => (
                     <motion.div
                       key={idx}
-                      whileHover={{ scale: 1.015, y: -2 }}
-                      whileTap={{ scale: 0.995 }}
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.99 }}
                       onClick={() => handleSendMessage(p.category + " " + p.text)}
-                      className="bg-[#1e1f20] hover:bg-neutral-800/80 border border-neutral-800/40 hover:border-neutral-700/40 rounded-2xl p-5 cursor-pointer flex flex-col justify-between min-h-[120px] transition-all group"
+                      className="bg-transparent border-b border-white/[0.04] hover:border-zinc-700/50 py-5 cursor-pointer flex flex-col justify-between min-h-[120px] transition-all duration-300 group rounded-none"
                     >
-                      <p className="text-sm font-medium text-neutral-300 leading-relaxed">
-                        <span className="text-neutral-500 group-hover:text-neutral-400 font-semibold block text-[11px] uppercase tracking-wider mb-1.5">
+                      <p className="text-sm font-medium text-zinc-300 leading-relaxed tracking-tight group-hover:text-white transition-colors duration-300">
+                        <span className="text-zinc-500 group-hover:text-zinc-400 font-bold block text-[10px] uppercase tracking-widest mb-2 transition-colors duration-300">
                           {p.category}
                         </span>
                         {p.text}
                       </p>
-                      <div className="flex justify-end mt-4">
-                        <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center border border-neutral-800 group-hover:border-neutral-700 transition-colors">
+                      <div className="flex justify-end mt-2">
+                        <div className="text-zinc-500 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition-all duration-300">
                           {p.icon}
                         </div>
                       </div>
@@ -841,22 +1311,17 @@ export default function Home() {
                 </div>
 
                 {/* Extra Guidance */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8 mx-auto w-full">
-                  <div className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-900/30 px-3.5 py-1.5 rounded-full border border-neutral-800/40">
-                    <Info size={12} className="text-neutral-400" />
-                    <span>Choose Thinking Mode or Google Search from toggles at the bottom</span>
-                  </div>
-                  
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10 mx-auto w-full">
                   <button
                     onClick={() => setIsKeyModalOpen(true)}
-                    className={`flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full border transition-all ${
+                    className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full border transition-all duration-300 ${
                       clientApiKey 
-                        ? "bg-emerald-950/20 border-emerald-800/30 text-emerald-400" 
-                        : "bg-amber-950/20 border-amber-850/30 text-amber-400 animate-pulse"
+                        ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.05)]" 
+                        : "bg-white/[0.01] border-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.03]"
                     }`}
                   >
-                    <Key size={11} />
-                    <span>{clientApiKey ? "Custom Key Saved" : "No Key Configured? Click here"}</span>
+                    <Key size={10} />
+                    <span>{clientApiKey ? "Key configured" : "Configure Key"}</span>
                   </button>
                 </div>
               </div>
@@ -871,12 +1336,12 @@ export default function Home() {
                       key={m.id}
                       className={`flex gap-4 sm:gap-6 items-start ${
                         isUser ? "justify-end" : "justify-start"
-                      }`}
+                      } animate-fade-in`}
                     >
                       {/* Left icon wrapper for AI messages */}
                       {!isUser && (
-                        <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-800 flex items-center justify-center flex-shrink-0 shadow">
-                          <GeminiSpark className="w-5 h-5" />
+                        <div className="w-7 h-7 rounded-lg bg-[#08080a] border border-white/[0.04] flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <GeminiSpark className="w-3.5 h-3.5 text-zinc-400" mono={true} active={isStreaming} />
                         </div>
                       )}
 
@@ -887,30 +1352,70 @@ export default function Home() {
                       >
                         {/* Message content box */}
                         <div
-                          className={`rounded-2xl text-sm leading-relaxed ${
+                          className={`text-[14px] leading-relaxed ${
                             isUser
-                              ? "bg-neutral-800 text-neutral-200 px-4 py-3 shadow-sm font-normal"
-                              : "text-neutral-200"
+                              ? "text-zinc-100 font-medium tracking-tight text-right leading-relaxed max-w-xl"
+                              : m.content && m.content.startsWith("Error:")
+                              ? "w-full"
+                              : "text-zinc-300"
                           }`}
                         >
                           {isUser ? (
-                            <p className="whitespace-pre-wrap">{m.content}</p>
+                            <div className="space-y-3">
+                              {getPromptTextOnly(m.content) ? (
+                                <p className="whitespace-pre-wrap">{getPromptTextOnly(m.content)}</p>
+                              ) : (
+                                <p className="text-xs text-neutral-500 italic font-medium">Sent attached document(s)</p>
+                              )}
+                              {m.files && m.files.length > 0 && (
+                                <div className="flex flex-col gap-2 mt-3 items-end">
+                                  {m.files.map((file, idx) => (
+                                    <div
+                                      key={file.id || idx}
+                                      className="flex items-center gap-3 bg-[#0a0a0d] border border-white/[0.04] rounded-xl p-2.5 w-64 transition-all hover:border-white/[0.08]"
+                                    >
+                                      <div className="w-8 h-8 rounded-lg bg-zinc-900 text-zinc-400 flex items-center justify-center flex-shrink-0 border border-white/[0.04]">
+                                        <FileText size={14} />
+                                      </div>
+                                      <div className="min-w-0 flex-1 text-left">
+                                        <p className="text-xs font-bold text-zinc-200 truncate" title={file.name}>
+                                          {file.name}
+                                        </p>
+                                        <p className="text-[9px] text-zinc-500 font-mono">
+                                          {formatFileSize(file.size)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : m.content && m.content.startsWith("Error:") ? (
+                            /* Premium structural console-style banner for error states */
+                            <div className="bg-zinc-900/40 border border-red-500/20 backdrop-blur-md rounded-xl p-4 text-xs text-zinc-400 max-w-xl mx-auto text-center font-mono leading-relaxed tracking-wide shadow-inner select-none animate-fade-in my-2">
+                              <span className="text-red-400 font-bold uppercase tracking-wider block mb-1">SYSTEM ALERT</span>
+                              {m.content.substring(6).trim()}
+                            </div>
                           ) : (
                             /* Render Markdown for Assistant */
-                            <div className="prose prose-invert prose-sm max-w-none space-y-3">
+                            <div className={`prose prose-invert prose-sm max-w-none space-y-3 ${
+                              isStreaming && activeConversation && activeConversation.messages[activeConversation.messages.length - 1]?.id === m.id
+                                ? "streaming-active-container"
+                                : ""
+                            }`}>
                               {m.content ? (
                                 <ReactMarkdown
                                   components={{
-                                    p: ({ children }) => <p className="mb-4 leading-relaxed text-neutral-300">{children}</p>,
-                                    ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-1 text-neutral-300">{children}</ol>,
-                                    ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-1 text-neutral-300">{children}</ul>,
-                                    li: ({ children }) => <li className="text-neutral-300 mb-1">{children}</li>,
-                                    h1: ({ children }) => <h1 className="text-lg font-semibold mt-6 mb-2 text-white">{children}</h1>,
-                                    h2: ({ children }) => <h2 className="text-md font-semibold mt-4 mb-2 text-white">{children}</h2>,
-                                    h3: ({ children }) => <h3 className="text-sm font-semibold mt-3 mb-1 text-white">{children}</h3>,
+                                    p: ({ children }) => <p className="mb-4 leading-relaxed text-neutral-300 font-medium tracking-tight">{children}</p>,
+                                    ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-1.5 text-neutral-300 font-medium">{children}</ol>,
+                                    ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-1.5 text-neutral-300 font-medium">{children}</ul>,
+                                    li: ({ children }) => <li className="text-neutral-300 mb-1 leading-relaxed">{children}</li>,
+                                    h1: ({ children }) => <h1 className="text-lg font-bold mt-6 mb-2.5 text-white tracking-tight">{children}</h1>,
+                                    h2: ({ children }) => <h2 className="text-md font-bold mt-5 mb-2 text-white tracking-tight">{children}</h2>,
+                                    h3: ({ children }) => <h3 className="text-sm font-semibold mt-4 mb-1 text-white tracking-tight">{children}</h3>,
                                     a: ({ href, children }) => (
-                                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline inline-flex items-center gap-0.5">
-                                        {children} <ExternalLink size={10} />
+                                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-350 hover:underline inline-flex items-center gap-0.5 font-bold transition-colors">
+                                        {children} <ExternalLink size={9} />
                                       </a>
                                     ),
                                     code: ({ className, children, ...props }: any) => {
@@ -921,7 +1426,7 @@ export default function Home() {
                                         return <CodeBlock language={match ? match[1] : 'code'} value={codeContent} />;
                                       }
                                       return (
-                                        <code className="bg-neutral-800 text-blue-300 px-1.5 py-0.5 rounded text-xs font-mono border border-neutral-700/40" {...props}>
+                                        <code className="bg-[#0f0f11] text-indigo-300 px-1.5 py-0.5 rounded text-[12px] font-mono border border-white/[0.04]" {...props}>
                                           {children}
                                         </code>
                                       );
@@ -931,14 +1436,17 @@ export default function Home() {
                                   {m.content}
                                 </ReactMarkdown>
                               ) : (
-                                /* Streaming message with gorgeous loading shimmer */
-                                <div className="flex items-center gap-2 text-neutral-400 italic">
-                                  <div className="flex space-x-1.5 items-center">
-                                    <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                    <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                    <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce"></div>
+                                /* High-status weightless skeleton loader for the absolute beginning of stream */
+                                <div className="space-y-3 py-1 select-none animate-pulse max-w-lg">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/80 animate-ping"></div>
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-400 bg-indigo-950/30 px-2.5 py-1 rounded-md border border-indigo-800/20">
+                                      Synthesizing
+                                    </span>
                                   </div>
-                                  <span className="text-xs text-neutral-500">Gemini is synthesizing...</span>
+                                  <div className="h-3 bg-zinc-800/40 border border-white/[0.02] rounded-lg w-11/12"></div>
+                                  <div className="h-3 bg-zinc-800/40 border border-white/[0.02] rounded-lg w-4/5"></div>
+                                  <div className="h-3 bg-zinc-800/40 border border-white/[0.02] rounded-lg w-3/5"></div>
                                 </div>
                               )}
                             </div>
@@ -947,9 +1455,9 @@ export default function Home() {
 
                         {/* Grounding sources citation chips */}
                         {!isUser && m.sources && m.sources.length > 0 && (
-                          <div className="mt-4 border-t border-neutral-800/60 pt-3 w-full">
-                            <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider block mb-2 flex items-center gap-1">
-                              <Globe size={11} className="text-blue-400" /> Search Sources
+                          <div className="mt-4 border-t border-white/[0.02] pt-3 w-full">
+                            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest block mb-2.5 flex items-center gap-1.5">
+                              <Globe size={11} className="text-indigo-400" /> Grounding Sources
                             </span>
                             <div className="flex flex-wrap gap-2">
                               {m.sources.map((s, idx) => (
@@ -958,7 +1466,7 @@ export default function Home() {
                                   href={s.uri}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 bg-[#1e1f20] hover:bg-neutral-800 border border-neutral-800/80 px-2.5 py-1 rounded-xl text-xs text-neutral-300 transition-colors"
+                                  className="inline-flex items-center gap-1.5 bg-[#0a0a0c]/80 hover:bg-[#121215]/90 border border-white/[0.03] hover:border-white/[0.08] px-3 py-1.5 rounded-xl text-xs font-medium text-neutral-300 transition-all duration-200"
                                 >
                                   <Globe size={10} className="text-neutral-500" />
                                   <span className="max-w-[150px] truncate">{s.title || s.uri}</span>
@@ -972,8 +1480,8 @@ export default function Home() {
 
                       {/* Right icon wrapper for user messages */}
                       {isUser && (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-sm flex-shrink-0">
-                          TN
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-600 flex items-center justify-center font-bold text-white text-[11px] shadow-lg shadow-purple-500/10 flex-shrink-0 select-none">
+                          G
                         </div>
                       )}
                     </div>
@@ -986,80 +1494,123 @@ export default function Home() {
         </main>
 
         {/* Bottom dock container for auto-expanding input box */}
-        <div id="input-container" className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#131314] via-[#131314]/95 to-transparent pt-10 pb-4 px-4 z-10">
-          <div className="max-w-3xl mx-auto w-full">
+        <div id="input-container" className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#070709] via-[#070709]/95 to-transparent pt-12 pb-6 z-10">
+          <div className="max-w-3xl mx-auto w-full px-6">
             
             {/* Input Bar Card */}
-            <div className="bg-[#1e1f20] border border-neutral-800/80 rounded-[28px] p-2 flex flex-col gap-1 transition-all shadow-xl hover:border-neutral-700/60 focus-within:border-neutral-700/90 focus-within:ring-1 focus-within:ring-neutral-800">
+            <div className="bg-[#0c0c0f] border border-white/[0.04] rounded-2xl p-5 pb-4 flex flex-col gap-2 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.5),_0_16px_40px_rgba(0,0,0,0.7)] hover:border-white/[0.07] focus-within:border-zinc-700/40 focus-within:ring-1 focus-within:ring-white/[0.01]">
               
-              {/* Inner Expanding Textarea */}
-              <div className="flex items-start px-3 pt-2">
-                <textarea
-                  ref={textareaRef}
-                  rows={1}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={
-                    useThinking 
-                      ? "Ask Gemini 3.1 Pro (Thinking Mode Enabled)..." 
-                      : useSearch 
-                        ? "Search with Google and Chat..." 
-                        : "Ask Gemini..."
-                  }
-                  className="flex-1 bg-transparent border-0 resize-none outline-none text-neutral-200 text-sm py-1 placeholder-neutral-500 min-h-[24px] max-h-[200px] leading-relaxed"
-                />
-              </div>
-
-              {/* Action Toolbar Inside Input Bar */}
-              <div className="flex items-center justify-between px-2 pt-1 pb-1">
-                <div className="flex items-center gap-1">
-                  
-                  {/* Thinking Mode Switch Button */}
-                  <button
-                    onClick={() => {
-                      setUseThinking(!useThinking);
-                      if (!useThinking) setUseSearch(false); // Mutual exclusivity is cleaner for models
-                    }}
-                    className={`p-2 rounded-full transition-all flex items-center justify-center ${
-                      useThinking
-                        ? "bg-purple-900/50 text-purple-300 ring-1 ring-purple-700/40"
-                        : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-                    }`}
-                    title="Thinking Mode (Gemini 3.1 Pro)"
-                  >
-                    <Sparkles size={16} />
-                  </button>
-
-                  {/* Google Search Grounding Switch Button */}
-                  <button
-                    onClick={() => {
-                      setUseSearch(!useSearch);
-                      if (!useSearch) setUseThinking(false);
-                    }}
-                    className={`p-2 rounded-full transition-all flex items-center justify-center ${
-                      useSearch
-                        ? "bg-blue-900/50 text-blue-300 ring-1 ring-blue-700/40"
-                        : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-                    }`}
-                    title="Google Search Grounding"
-                  >
-                    <Globe size={16} />
-                  </button>
+              {/* Attached files preview container */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-3 pt-2 pb-1 border-b border-white/[0.03]">
+                  {attachedFiles.map((file) => (
+                    <div
+                       key={file.id}
+                       className="flex items-center gap-2 bg-black/40 border border-white/[0.02] rounded-xl px-3 py-1.5 text-xs text-neutral-300 max-w-[240px] animate-fade-in"
+                     >
+                       <FileText size={13} className="text-indigo-400 flex-shrink-0" />
+                       <div className="min-w-0 flex-1">
+                         <p className="font-semibold truncate text-[11px]" title={file.name}>
+                           {file.name}
+                         </p>
+                         <p className="text-[9px] text-neutral-500 font-mono">
+                           {formatFileSize(file.size)}
+                         </p>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id));
+                         }}
+                         className="p-1 hover:bg-white/[0.05] text-neutral-500 hover:text-neutral-300 rounded-md transition-colors"
+                         title="Remove attachment"
+                       >
+                         <X size={11} />
+                       </button>
+                     </div>
+                   ))}
+                 </div>
+               )}
+ 
+                {/* Inner Expanding Textarea */}
+               <div className="flex items-start px-2 pt-1.5">
+                 <textarea
+                   ref={textareaRef}
+                   rows={1}
+                   value={input}
+                   onChange={(e) => setInput(e.target.value)}
+                   onKeyDown={handleKeyDown}
+                   onPaste={handlePaste}
+                   placeholder={activeProvider === "google" ? (useThinking ? "Ask Gemini 3.1 Pro (Thinking Mode Enabled)..." : "Ask Gemini 3.5 Flash...") : activeProvider === "anthropic" ? "Ask Claude 3.7 Sonnet..." : "Ask GPT-4o..."}
+                    data-dummy={
+                     useThinking 
+                       ? "Ask Gemini 3.1 Pro (Thinking Mode Enabled)..." 
+                       : "Ask Gemini 3.5 Flash..."
+                   }
+                   className="flex-1 bg-transparent border-0 resize-none outline-none text-neutral-200 text-sm py-1 placeholder-neutral-650 min-h-[24px] max-h-[200px] leading-relaxed"
+                 />
+               </div>
+ 
+               {/* Action Toolbar Inside Input Bar */}
+               <div className="flex items-center justify-between px-1.5 pt-3 pb-1">
+                 <div className="flex items-center gap-1">
+                   
+                   {/* File Upload / Attachment Button */}
+                   <label
+                     className="p-2 rounded-full text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200 transition-all flex items-center justify-center cursor-pointer active:scale-95"
+                     title="Attach text or code file (.txt, .js, .ts, etc.)"
+                   >
+                     <Paperclip size={14} />
+                     <input
+                       type="file"
+                       accept=".txt,.js,.jsx,.ts,.tsx,.json,.css,.html,.md,.py,.java,.cpp,.c,.rs,.sh,.yml,.yaml"
+                       onChange={handleFileUpload}
+                       className="hidden"
+                     />
+                   </label>
+ 
+                    {/* Thinking Mode Switch Button */}
+                   <button
+                     onClick={() => {
+                       setUseThinking(!useThinking);
+                     }}
+                     className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
+                       useThinking
+                         ? "bg-purple-950/40 text-purple-300 border border-purple-800/40 shadow-[0_0_8px_rgba(168,85,247,0.1)]"
+                         : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
+                     }`}
+                     title="Thinking Mode (Gemini 3.1 Pro)"
+                   >
+                     <Sparkles size={14} />
+                   </button>
+                   <button
+                     onClick={() => setIsKeyModalOpen(true)}
+                     className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
+                       (activeProvider === "google" ? clientApiKey : activeProvider === "anthropic" ? clientAnthropicKey : clientOpenaiKey)
+                         ? "text-emerald-400 hover:bg-white/[0.04] bg-emerald-500/5 border border-emerald-500/10"
+                         : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
+                     }`}
+                     title="Configure Encryption Key Vault"
+                   >
+                     <Key size={14} />
+                   </button>
+                   <button className="hidden">
+                   </button>
 
                   {/* Feature Active Badges */}
-                  {(useThinking || useSearch) && (
+                  {useThinking && (
                     <div className="hidden sm:flex items-center gap-1 pl-1">
-                      {useThinking && (
-                        <span className="text-[9px] font-bold text-purple-400 bg-purple-950/40 border border-purple-800/30 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          Thinking Mode
-                        </span>
-                      )}
-                      {useSearch && (
-                        <span className="text-[9px] font-bold text-blue-400 bg-blue-950/40 border border-blue-800/30 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          Google Search
-                        </span>
-                      )}
+                      <span className="text-[9px] font-bold text-purple-400 bg-purple-950/20 border border-purple-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Thinking Mode
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Draft Saved Locally Badge */}
+                  {input.trim() && activeId && (
+                    <div className="flex items-center gap-1.5 pl-2 text-zinc-500 font-mono text-[10px] tracking-wide select-none animate-fade-in">
+                      <div className="w-1 h-1 rounded-full bg-emerald-500/80 animate-pulse" />
+                      <span>Draft saved locally</span>
                     </div>
                   )}
                 </div>
@@ -1067,22 +1618,22 @@ export default function Home() {
                 {/* Send Message Button */}
                 <button
                   onClick={() => handleSendMessage()}
-                  disabled={!input.trim() || isStreaming}
-                  className={`p-2.5 rounded-full flex items-center justify-center transition-all ${
-                    input.trim() && !isStreaming
-                      ? "bg-white text-black hover:bg-neutral-100 shadow"
-                      : "text-neutral-600 bg-neutral-800/40 cursor-not-allowed"
+                  disabled={(!input.trim() && attachedFiles.length === 0) || isStreaming}
+                  className={`p-2.5 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
+                    (input.trim() || attachedFiles.length > 0) && !isStreaming
+                      ? "bg-white text-[#070709] hover:bg-neutral-100 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)]"
+                      : "text-neutral-600 bg-white/[0.02] cursor-not-allowed"
                   }`}
                   title="Send message"
                 >
-                  <Send size={15} />
+                  <Send size={14} />
                 </button>
               </div>
             </div>
 
             {/* Disclaimer disclaimer text */}
-            <p className="text-[11px] text-neutral-600 text-center mt-2.5">
-              Gemini can make mistakes, so double-check its responses. Full-stack security ensured via secure server API.
+            <p className="text-[10px] text-zinc-650/30 text-center mt-3.5 select-none font-medium tracking-wide">
+              Gemini can make mistakes. Please verify critical details.
             </p>
           </div>
         </div>
@@ -1096,93 +1647,160 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none"
           >
             <motion.div
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="bg-[#1e1f20] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative overflow-hidden"
+              className="bg-[#0c0c0e]/95 border border-white/[0.04] rounded-3xl p-6 max-w-md w-full shadow-[0_24px_50px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-2xl"
             >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-pink-500 to-amber-400" />
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
               
               <div className="flex items-start gap-4 mb-5">
-                <div className="w-10 h-10 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 flex-shrink-0">
-                  <Key size={20} />
+                <div className="w-10 h-10 rounded-full bg-white/[0.02] border border-white/[0.03] flex items-center justify-center text-indigo-400 flex-shrink-0 shadow-inner">
+                  <Key size={18} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Configure Gemini API Key</h3>
-                  <p className="text-xs text-neutral-400 mt-1">
-                    Optionally use your own custom API key. This is safely saved in your browser&apos;s local storage and never exposed.
+                  <h3 className="text-md font-bold text-white tracking-tight">Encryption Key Vault</h3>
+                  <p className="text-[11px] text-neutral-500 mt-1 leading-relaxed font-medium">
+                    Keys are encrypted locally and stored in your browser&apos;s localStorage. They never touch our servers and are sent directly to API endpoints.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
+                {/* Google Gemini Key */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block">
-                    Gemini API Key
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showKeyText ? "text" : "password"}
-                      value={tempApiKey}
-                      onChange={(e) => setTempApiKey(e.target.value)}
-                      placeholder="AIzaSy..."
-                      className="w-full bg-neutral-900/50 border border-neutral-800 focus:border-neutral-700 rounded-xl px-3 py-2.5 text-sm text-neutral-200 placeholder-neutral-600 outline-none pr-10 font-mono transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKeyText(!showKeyText)}
-                      className="absolute right-3 text-neutral-400 hover:text-neutral-200 text-xs font-semibold"
-                    >
-                      {showKeyText ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-neutral-900/30 border border-neutral-800/40 rounded-xl p-3.5 space-y-2">
-                  <div className="flex items-start gap-2.5">
-                    <ShieldAlert size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-xs text-neutral-400 leading-relaxed">
-                      If the server has a master key configured (default in Google AI Studio), that key is preferred. When deployed on Vercel or other servers, entering your key here ensures the app works immediately.
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-neutral-500 pl-6">
-                    Don&apos;t have a key? Get one for free at{" "}
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
+                      Google Gemini Key
+                    </label>
                     <a
                       href="https://aistudio.google.com/"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                      className="text-[9px] text-indigo-400 hover:underline inline-flex items-center gap-0.5"
                     >
-                      Google AI Studio <ExternalLink size={8} />
+                      Get Key <ExternalLink size={7} />
                     </a>
                   </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempGoogleKey}
+                      onChange={(e) => setTempGoogleKey(e.target.value)}
+                      placeholder={clientApiKey ? "••••••••••••••••" : "AIzaSy..."}
+                      className="w-full bg-[#070709]/80 border border-white/[0.04] focus:border-indigo-500/50 rounded-xl px-3 py-2.5 text-xs text-neutral-200 placeholder-neutral-700 outline-none pr-12 font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Anthropic Claude Key */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
+                      Anthropic Claude Key (BYOK)
+                    </label>
+                    <a
+                      href="https://console.anthropic.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[9px] text-amber-400 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      Get Key <ExternalLink size={7} />
+                    </a>
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempAnthropicKey}
+                      onChange={(e) => setTempAnthropicKey(e.target.value)}
+                      placeholder={clientAnthropicKey ? "••••••••••••••••" : "sk-ant-..."}
+                      className="w-full bg-[#070709]/80 border border-white/[0.04] focus:border-amber-500/50 rounded-xl px-3 py-2.5 text-xs text-neutral-200 placeholder-neutral-700 outline-none pr-12 font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* OpenAI GPT Key */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
+                      OpenAI GPT Key (BYOK)
+                    </label>
+                    <a
+                      href="https://platform.openai.com/api-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[9px] text-emerald-400 hover:underline inline-flex items-center gap-0.5"
+                    >
+                      Get Key <ExternalLink size={7} />
+                    </a>
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempOpenaiKey}
+                      onChange={(e) => setTempOpenaiKey(e.target.value)}
+                      placeholder={clientOpenaiKey ? "••••••••••••••••" : "sk-..."}
+                      className="w-full bg-[#070709]/80 border border-white/[0.04] focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-xs text-neutral-200 placeholder-neutral-700 outline-none pr-12 font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between px-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyText(!showKeyText)}
+                    className="text-neutral-500 hover:text-neutral-200 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1"
+                  >
+                    <span>Visibility:</span>
+                    <span className="text-zinc-400">{showKeyText ? "Revealed" : "Masked"}</span>
+                  </button>
+                  <span className="text-[9px] text-neutral-500 font-mono">Secure Local Storage</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-neutral-900/80">
+              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-white/[0.02]">
                 <button
                   onClick={() => setIsKeyModalOpen(false)}
-                  className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-xs font-bold text-neutral-500 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => {
-                    setClientApiKey(tempApiKey.trim());
-                    if (tempApiKey.trim()) {
-                      localStorage.setItem("gemini_client_api_key", tempApiKey.trim());
+                    setClientApiKey(tempGoogleKey.trim());
+                    setClientAnthropicKey(tempAnthropicKey.trim());
+                    setClientOpenaiKey(tempOpenaiKey.trim());
+
+                    if (tempGoogleKey.trim()) {
+                      localStorage.setItem("gemini_client_api_key", tempGoogleKey.trim());
+                      localStorage.setItem("osy_key_google", tempGoogleKey.trim());
                     } else {
                       localStorage.removeItem("gemini_client_api_key");
+                      localStorage.removeItem("osy_key_google");
                     }
+
+                    if (tempAnthropicKey.trim()) {
+                      localStorage.setItem("osy_key_anthropic", tempAnthropicKey.trim());
+                    } else {
+                      localStorage.removeItem("osy_key_anthropic");
+                    }
+
+                    if (tempOpenaiKey.trim()) {
+                      localStorage.setItem("osy_key_openai", tempOpenaiKey.trim());
+                    } else {
+                      localStorage.removeItem("osy_key_openai");
+                    }
+
                     setIsKeyModalOpen(false);
+                    showNotification("Vault saved securely!", "success");
                   }}
-                  className="px-5 py-2 bg-white hover:bg-neutral-100 text-black font-semibold text-sm rounded-xl transition-all shadow-md"
+                  className="px-5 py-2 bg-white hover:bg-neutral-100 text-[#070709] font-bold text-xs rounded-xl transition-all shadow-md active:scale-95"
                 >
-                  Save Settings
+                  Save Vault
                 </button>
               </div>
             </motion.div>
@@ -1197,22 +1815,22 @@ export default function Home() {
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
+            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4.5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-md select-none ${
               notification.type === "success"
-                ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-300"
+                ? "bg-emerald-950/80 border-emerald-500/20 text-emerald-300"
                 : notification.type === "error"
-                ? "bg-red-950/90 border-red-500/30 text-red-300"
-                : "bg-neutral-900/95 border-neutral-800 text-neutral-300"
+                ? "bg-rose-950/80 border-rose-500/20 text-rose-300"
+                : "bg-[#0c0c0e]/95 border-white/[0.04] text-neutral-300"
             }`}
           >
-            <div className={`w-2 h-2 rounded-full ${
+            <div className={`w-1.5 h-1.5 rounded-full ${
               notification.type === "success" 
                 ? "bg-emerald-400 animate-pulse" 
                 : notification.type === "error" 
-                ? "bg-red-400 animate-pulse" 
-                : "bg-blue-400 animate-pulse"
+                ? "bg-rose-400 animate-pulse" 
+                : "bg-indigo-400 animate-pulse"
             }`} />
-            <span className="text-sm font-medium">{notification.message}</span>
+            <span className="text-xs font-bold tracking-tight">{notification.message}</span>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,113 +1,255 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
+import { normalizePayload } from "@/lib/payload-normalizer";
+import { AIProvider } from "@/types/ai";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, useThinking, useSearch, clientApiKey } = await req.json();
+    const body = await req.json();
+    const { 
+      messages, 
+      useThinking, 
+      useSearch, 
+      clientApiKey,
+      provider: bodyProvider,
+      modelId: bodyModelId,
+      userApiKey: bodyUserApiKey
+    } = body;
 
-    const apiKey = process.env.GEMINI_API_KEY || clientApiKey;
-    if (!apiKey) {
+    // Extract provider, modelId, and userApiKey from headers or body
+    const provider = (req.headers.get("x-ai-provider") || bodyProvider || "google") as AIProvider;
+    
+    // Default to clientApiKey or custom keys passed
+    const userApiKey = req.headers.get("x-user-api-key") || bodyUserApiKey;
+
+    // 1. Google Gemini Handling (native SDK with server-side / user keys)
+    if (provider === "google") {
+      const apiKey = userApiKey || process.env.GEMINI_API_KEY || clientApiKey;
+      if (!apiKey) {
+        return NextResponse.json(
+          { 
+            error: "Google Gemini API Key is missing. Please provide your API Key in Settings.",
+            isKeyMissing: true 
+          },
+          { status: 400 }
+        );
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build",
+          },
+        },
+      });
+
+      // Format messages for @google/genai
+      const contents = messages.map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      // Determine model and configuration
+      let model = bodyModelId || "gemini-3.5-flash";
+      const config: any = {
+        systemInstruction: "You are Gemini, a helpful, precise, and advanced AI assistant. Format your responses with clean Markdown. When writing code blocks, always specify the programming language (e.g., ```typescript) so that syntax highlighting works properly.",
+      };
+
+      if (useThinking) {
+        model = "gemini-3.1-pro-preview";
+        config.thinkingConfig = {
+          thinkingLevel: ThinkingLevel.HIGH,
+        };
+      } else if (model === "gemini-3.5-flash") {
+        config.tools = [{ googleSearch: {} }];
+      }
+
+      const responseStream = await ai.models.generateContentStream({
+        model,
+        contents,
+        config,
+      });
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            let groundingChunks: any[] = [];
+            for await (const chunk of responseStream) {
+              const text = chunk.text || "";
+
+              // Check for grounding metadata
+              const candidates = chunk.candidates;
+              if (candidates?.[0]?.groundingMetadata?.groundingChunks) {
+                const chunks = candidates[0].groundingMetadata.groundingChunks;
+                const mapped = chunks
+                  .map((c: any) => ({
+                    title: c.web?.title || c.title || "",
+                    uri: c.web?.uri || c.uri || "",
+                  }))
+                  .filter((c: any) => c.uri);
+                
+                // Append unique sources
+                for (const item of mapped) {
+                  if (!groundingChunks.some((g) => g.uri === item.uri)) {
+                    groundingChunks.push(item);
+                  }
+                }
+              }
+
+              if (text) {
+                const data = JSON.stringify({ text });
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              }
+            }
+
+            if (groundingChunks.length > 0) {
+              const data = JSON.stringify({ sources: groundingChunks });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            }
+
+            controller.close();
+          } catch (err: any) {
+            console.error("Gemini stream error:", err);
+            let errorMessage = err.message || "Streaming error";
+            if (err.status === 429 || errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+              errorMessage = "The AI is currently busy or out of free tokens. Please wait about 30 seconds and try again!";
+            }
+            const data = JSON.stringify({ error: errorMessage });
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
+    // 2. OpenAI & Anthropic BYOK Stateless Proxy Streaming
+    if (!userApiKey) {
       return NextResponse.json(
         { 
-          error: "GEMINI_API_KEY is not configured on the server. Please provide a custom Gemini API Key in Settings.",
+          error: `${provider.toUpperCase()} API Key is missing. Please provide your API Key in Settings.`,
           isKeyMissing: true 
         },
         { status: 400 }
       );
     }
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-
-    // Format messages for @google/genai
-    // Note: m.role is either 'user' or 'assistant'. Gemini expects 'user' or 'model'.
-    const contents = messages.map((m: any) => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.content }],
+    // Format chat payload
+    const unifiedMsgs = messages.map((m: any, i: number) => ({
+      id: m.id || String(i),
+      role: m.role || "user",
+      content: m.content || "",
+      timestamp: m.timestamp || Date.now()
     }));
 
-    // Determine model and configuration
-    let model = "gemini-3.5-flash";
-    const config: any = {
-      systemInstruction: "You are Gemini, a helpful, precise, and advanced AI assistant. Format your responses with clean Markdown. When writing code blocks, always specify the programming language (e.g., ```typescript) so that syntax highlighting works properly.",
-    };
+    const modelId = bodyModelId || (provider === "anthropic" ? "claude-3-7-sonnet" : "gpt-4o");
+    const payload = normalizePayload(provider, modelId, unifiedMsgs, { searchGrounding: false });
 
-    if (useThinking) {
-      model = "gemini-3.1-pro-preview";
-      config.thinkingConfig = {
-        thinkingLevel: ThinkingLevel.HIGH,
-      };
-    } else if (useSearch) {
-      model = "gemini-3.5-flash";
-      config.tools = [{ googleSearch: {} }];
+    let targetUrl = "";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+    if (provider === "anthropic") {
+      targetUrl = "https://api.anthropic.com/v1/messages";
+      headers["x-api-key"] = userApiKey;
+      headers["anthropic-version"] = "2023-06-01";
+      (payload as any).stream = true;
+    } else if (provider === "openai") {
+      targetUrl = "https://api.openai.com/v1/chat/completions";
+      headers["Authorization"] = `Bearer ${userApiKey}`;
+      (payload as any).stream = true;
     }
 
-    // Call generateContentStream
-    const responseStream = await ai.models.generateContentStream({
-      model,
-      contents,
-      config,
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      let parsedError = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        parsedError = parsed.error?.message || parsed.error || errorText;
+      } catch {}
+      return NextResponse.json(
+        { error: `${provider.toUpperCase()} API Error: ${parsedError}` },
+        { status: response.status }
+      );
+    }
+
+    if (!response.body) {
+      return NextResponse.json(
+        { error: "No response body returned from upstream AI provider." },
+        { status: 500 }
+      );
+    }
+
     const encoder = new TextEncoder();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
+        let buffer = "";
         try {
-          let groundingChunks: any[] = [];
-          for await (const chunk of responseStream) {
-            const text = chunk.text || "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-            // Check for grounding metadata
-            const candidates = chunk.candidates;
-            if (candidates?.[0]?.groundingMetadata?.groundingChunks) {
-              const chunks = candidates[0].groundingMetadata.groundingChunks;
-              const mapped = chunks
-                .map((c: any) => ({
-                  title: c.web?.title || c.title || "",
-                  uri: c.web?.uri || c.uri || "",
-                }))
-                .filter((c: any) => c.uri);
-              
-              // Append unique sources
-              for (const item of mapped) {
-                if (!groundingChunks.some((g) => g.uri === item.uri)) {
-                  groundingChunks.push(item);
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+
+              if (trimmed.startsWith("data: ")) {
+                const dataStr = trimmed.slice(6).trim();
+                if (dataStr === "[DONE]") continue;
+
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  let text = "";
+
+                  if (provider === "openai") {
+                    text = parsed.choices?.[0]?.delta?.content || "";
+                  } else if (provider === "anthropic") {
+                    if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+                      text = parsed.delta.text;
+                    }
+                  }
+
+                  if (text) {
+                    const outData = JSON.stringify({ text });
+                    controller.enqueue(encoder.encode(`data: ${outData}\n\n`));
+                  }
+                } catch (e) {
+                  // Ignore parse errors of incomplete chunks
                 }
               }
             }
-
-            if (text) {
-              const data = JSON.stringify({ text });
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            }
           }
-
-          // At the end, send the grounding chunks if any
-          if (groundingChunks.length > 0) {
-            const data = JSON.stringify({ sources: groundingChunks });
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-          }
-
           controller.close();
         } catch (err: any) {
-          console.error("Stream reader error:", err);
-          let errorMessage = err.message || "Streaming error";
-          if (err.status === 429 || errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
-            errorMessage = "The AI is currently busy or out of free tokens. Please wait about 30 seconds and try again!";
-          }
-          const data = JSON.stringify({ error: errorMessage });
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          console.error(`Error reading ${provider} stream:`, err);
+          const outData = JSON.stringify({ error: err.message || "Streaming error" });
+          controller.enqueue(encoder.encode(`data: ${outData}\n\n`));
           controller.close();
         }
-      },
+      }
     });
 
     return new Response(stream, {
@@ -117,16 +259,11 @@ export async function POST(req: NextRequest) {
         "Connection": "keep-alive",
       },
     });
+
   } catch (error: any) {
     console.error("API Route Error:", error);
-    if (error.status === 429 || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
-      return NextResponse.json(
-        { error: "The AI is currently busy or out of free tokens. Please wait about 30 seconds and try again!" },
-        { status: 429 }
-      );
-    }
     return NextResponse.json(
-      { error: "An unexpected error occurred." },
+      { error: error.message || "An unexpected error occurred." },
       { status: 500 }
     );
   }
