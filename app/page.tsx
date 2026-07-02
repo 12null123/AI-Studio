@@ -4,6 +4,9 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { getStorageManager, StorageKey, AIProvider } from "@/lib/secure-storage/manager";
 import { PROVIDER_CONFIG } from "@/types/ai";
+import { ArenaHeader } from "@/components/ArenaHeader";
+import { ArenaPanes } from "@/components/ArenaPanes";
+import { streamDualResponse } from "@/lib/arena-utils";
 import {
   Plus,
   MessageSquare,
@@ -239,6 +242,17 @@ export default function Home() {
   const [tempAnthropicKey, setTempAnthropicKey] = useState("");
   const [tempOpenaiKey, setTempOpenaiKey] = useState("");
   const [showKeyText, setShowKeyText] = useState(false);
+
+  // Arena Mode state
+  const [isArenaMode, setIsArenaMode] = useState(false);
+  const [arenaProviderA, setArenaProviderA] = useState<"google" | "anthropic" | "openai">("google");
+  const [arenaProviderB, setArenaProviderB] = useState<"google" | "anthropic" | "openai">("anthropic");
+  const [arenaResponseA, setArenaResponseA] = useState("");
+  const [arenaResponseB, setArenaResponseB] = useState("");
+  const [arenaStreamingA, setArenaStreamingA] = useState(false);
+  const [arenaStreamingB, setArenaStreamingB] = useState(false);
+  const [arenaSourcesA, setArenaSourcesA] = useState<Array<{ title: string; uri: string }>>([]);
+  const [arenaSourcesB, setArenaSourcesB] = useState<Array<{ title: string; uri: string }>>([]);
 
   // Floating toast notification state
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -960,6 +974,55 @@ export default function Home() {
         return final;
       });
 
+      // Handle Arena Mode streaming if enabled
+      if (isArenaMode) {
+        setArenaStreamingA(true);
+        setArenaStreamingB(true);
+        
+        streamDualResponse(
+          updatedMessages,
+          arenaProviderA,
+          arenaProviderB,
+          clientApiKey,
+          clientAnthropicKey,
+          clientOpenaiKey,
+          useThinking,
+          activeModelId,
+          // onChunkA
+          (chunk) => {
+            if (chunk.text) {
+              setArenaResponseA((prev) => prev + chunk.text);
+            }
+            if (chunk.sources) {
+              setArenaSourcesA(chunk.sources);
+            }
+          },
+          // onChunkB
+          (chunk) => {
+            if (chunk.text) {
+              setArenaResponseB((prev) => prev + chunk.text);
+            }
+            if (chunk.sources) {
+              setArenaSourcesB(chunk.sources);
+            }
+          },
+          // onErrorA
+          (error) => {
+            setArenaResponseA(`Error: ${error}`);
+            setArenaStreamingA(false);
+          },
+          // onErrorB
+          (error) => {
+            setArenaResponseB(`Error: ${error}`);
+            setArenaStreamingB(false);
+          },
+          // onCompleteA
+          () => setArenaStreamingA(false),
+          // onCompleteB
+          () => setArenaStreamingB(false)
+        );
+      }
+
     } catch (err: any) {
       console.error("Failed to generate stream response:", err);
       // Append error message to assistant chat content
@@ -1483,11 +1546,51 @@ export default function Home() {
               )}
             </div>
 
+            <button
+              onClick={() => setIsArenaMode(!isArenaMode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                isArenaMode
+                  ? "bg-indigo-950/30 border-indigo-500/30 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.1)]"
+                  : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+              }`}
+              title="Toggle Arena Mode (Compare Models)"
+            >
+              <span>Arena</span>
+            </button>
+
             <div className="w-7 h-7 rounded-full bg-zinc-900 border border-white/[0.08] flex items-center justify-center font-bold text-zinc-400 text-[10px] select-none shadow-sm">
               P
             </div>
           </div>
         </header>
+
+        {/* Arena Mode Header */}
+        {isArenaMode && (
+          <ArenaHeader
+            isOpen={isArenaMode}
+            onToggle={setIsArenaMode}
+            providerA={arenaProviderA}
+            providerB={arenaProviderB}
+            onProviderAChange={setArenaProviderA}
+            onProviderBChange={setArenaProviderB}
+            streamingA={arenaStreamingA}
+            streamingB={arenaStreamingB}
+          />
+        )}
+
+        {/* Arena Panes */}
+        {isArenaMode && (arenaResponseA || arenaResponseB || arenaStreamingA || arenaStreamingB) && (
+          <ArenaPanes
+            providerA={arenaProviderA}
+            providerB={arenaProviderB}
+            responseA={arenaResponseA}
+            responseB={arenaResponseB}
+            streamingA={arenaStreamingA}
+            streamingB={arenaStreamingB}
+            sourcesA={arenaSourcesA}
+            sourcesB={arenaSourcesB}
+          />
+        )}
 
         {/* Chat Scrolling Area */}
         <main className="flex-1 overflow-y-auto py-6 z-10 scrollbar-thin scrollbar-thumb-white/[0.02]">
