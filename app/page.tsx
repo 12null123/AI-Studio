@@ -2,6 +2,11 @@
 
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
+import { getStorageManager, StorageKey, AIProvider } from "@/lib/secure-storage/manager";
+import { PROVIDER_CONFIG } from "@/types/ai";
+import { ArenaHeader } from "@/components/ArenaHeader";
+import { ArenaPanes } from "@/components/ArenaPanes";
+import { streamDualResponse } from "@/lib/arena-utils";
 import {
   Plus,
   MessageSquare,
@@ -28,7 +33,8 @@ import {
   Upload,
   FileText,
   X,
-  Paperclip
+  Paperclip,
+  Eye
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -201,33 +207,14 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
 export default function Home() {
   const isMobile = useIsMobile();
   
+  // Storage manager
+  const storageManager = getStorageManager();
+  const [storageReady, setStorageReady] = useState(false);
+  
   // State
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("gemini_wrapper_chats");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse localstorage conversations on init:", e);
-      }
-    }
-    return [];
-  });
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  const [activeId, setActiveId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      const savedActiveId = localStorage.getItem("gemini_active_chat_id");
-      if (savedActiveId) return savedActiveId;
-      try {
-        const saved = localStorage.getItem("gemini_wrapper_chats");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.length > 0) return parsed[0].id;
-        }
-      } catch {}
-    }
-    return "";
-  });
+  const [activeId, setActiveId] = useState<string>("");
 
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -242,37 +229,12 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState("");
 
   // Custom client-side API key states for multi-provider
-  const [clientApiKey, setClientApiKey] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("gemini_client_api_key") || localStorage.getItem("osy_key_google") || "";
-    }
-    return "";
-  });
-  const [clientAnthropicKey, setClientAnthropicKey] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("osy_key_anthropic") || "";
-    }
-    return "";
-  });
-  const [clientOpenaiKey, setClientOpenaiKey] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("osy_key_openai") || "";
-    }
-    return "";
-  });
+  const [clientApiKey, setClientApiKey] = useState<string>("");
+  const [clientAnthropicKey, setClientAnthropicKey] = useState<string>("");
+  const [clientOpenaiKey, setClientOpenaiKey] = useState<string>("");
 
-  const [activeProvider, setActiveProvider] = useState<"google" | "anthropic" | "openai">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("osy_active_provider") as any) || "google";
-    }
-    return "google";
-  });
-  const [activeModelId, setActiveModelId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("osy_active_model_id") || "gemini-3.5-flash";
-    }
-    return "gemini-3.5-flash";
-  });
+  const [activeProvider, setActiveProvider] = useState<"google" | "anthropic" | "openai">("google");
+  const [activeModelId, setActiveModelId] = useState<string>("gemini-3.5-flash");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
@@ -280,6 +242,17 @@ export default function Home() {
   const [tempAnthropicKey, setTempAnthropicKey] = useState("");
   const [tempOpenaiKey, setTempOpenaiKey] = useState("");
   const [showKeyText, setShowKeyText] = useState(false);
+
+  // Arena Mode state
+  const [isArenaMode, setIsArenaMode] = useState(false);
+  const [arenaProviderA, setArenaProviderA] = useState<"google" | "anthropic" | "openai">("google");
+  const [arenaProviderB, setArenaProviderB] = useState<"google" | "anthropic" | "openai">("anthropic");
+  const [arenaResponseA, setArenaResponseA] = useState("");
+  const [arenaResponseB, setArenaResponseB] = useState("");
+  const [arenaStreamingA, setArenaStreamingA] = useState(false);
+  const [arenaStreamingB, setArenaStreamingB] = useState(false);
+  const [arenaSourcesA, setArenaSourcesA] = useState<Array<{ title: string; uri: string }>>([]);
+  const [arenaSourcesB, setArenaSourcesB] = useState<Array<{ title: string; uri: string }>>([]);
 
   // Floating toast notification state
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -440,58 +413,172 @@ export default function Home() {
     }
   ];
 
-  // Auto-sync conversations changes to localStorage
+  // Initialize storage on mount
   useEffect(() => {
-    localStorage.setItem("gemini_wrapper_chats", JSON.stringify(conversations));
-  }, [conversations]);
+    const initializeStorage = async () => {
+      try {
+        await storageManager.initialize();
+        
+        // Load conversations
+        const savedChats = await storageManager.getAppState(StorageKey.CONVERSATIONS);
+        if (savedChats) {
+          try {
+            setConversations(JSON.parse(savedChats));
+          } catch (e) {
+            console.error("[v0] Failed to parse conversations:", e);
+          }
+        }
+        
+        // Load active chat ID
+        const savedActiveId = await storageManager.getAppState(StorageKey.ACTIVE_CHAT_ID);
+        if (savedActiveId) {
+          setActiveId(savedActiveId);
+        } else if (savedChats) {
+          // Fallback to first chat if no active ID
+          try {
+            const parsed = JSON.parse(savedChats);
+            if (parsed.length > 0) setActiveId(parsed[0].id);
+          } catch {}
+        }
+        
+        // Load API keys
+        const googleKey = await storageManager.getCredential(AIProvider.GOOGLE);
+        if (googleKey) setClientApiKey(googleKey);
+        
+        const anthropicKey = await storageManager.getCredential(AIProvider.ANTHROPIC);
+        if (anthropicKey) setClientAnthropicKey(anthropicKey);
+        
+        const openaiKey = await storageManager.getCredential(AIProvider.OPENAI);
+        if (openaiKey) setClientOpenaiKey(openaiKey);
+        
+        // Load provider and model settings
+        const provider = await storageManager.getAppState(StorageKey.ACTIVE_PROVIDER);
+        if (provider) setActiveProvider(provider as any);
+        
+        const modelId = await storageManager.getAppState(StorageKey.ACTIVE_MODEL_ID);
+        if (modelId) setActiveModelId(modelId);
+        
+        setStorageReady(true);
+        console.log("[v0] Storage initialized successfully");
+      } catch (error) {
+        console.error("[v0] Failed to initialize storage:", error);
+        setStorageReady(true);
+      }
+    };
+    
+    initializeStorage();
+  }, [storageManager]);
 
-  // Auto-sync activeId changes to localStorage
+  // Auto-sync conversations changes to encrypted storage
   useEffect(() => {
-    if (activeId) {
-      localStorage.setItem("gemini_active_chat_id", activeId);
-    } else {
-      localStorage.removeItem("gemini_active_chat_id");
-    }
-  }, [activeId]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        await storageManager.setAppState(StorageKey.CONVERSATIONS, JSON.stringify(conversations));
+      } catch (error) {
+        console.error("[v0] Failed to sync conversations:", error);
+      }
+    };
+    sync();
+  }, [conversations, storageReady, storageManager]);
 
-  // Auto-sync clientApiKey changes to localStorage
+  // Auto-sync activeId changes to encrypted storage
   useEffect(() => {
-    if (clientApiKey) {
-      localStorage.setItem("gemini_client_api_key", clientApiKey);
-      localStorage.setItem("osy_key_google", clientApiKey);
-    } else {
-      localStorage.removeItem("gemini_client_api_key");
-      localStorage.removeItem("osy_key_google");
-    }
-  }, [clientApiKey]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (activeId) {
+          await storageManager.setAppState(StorageKey.ACTIVE_CHAT_ID, activeId);
+        } else {
+          await storageManager.removeAppState(StorageKey.ACTIVE_CHAT_ID);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync activeId:", error);
+      }
+    };
+    sync();
+  }, [activeId, storageReady, storageManager]);
 
+  // Auto-sync clientApiKey changes to encrypted storage
   useEffect(() => {
-    if (clientAnthropicKey) {
-      localStorage.setItem("osy_key_anthropic", clientAnthropicKey);
-    } else {
-      localStorage.removeItem("osy_key_anthropic");
-    }
-  }, [clientAnthropicKey]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (clientApiKey) {
+          await storageManager.setCredential(AIProvider.GOOGLE, clientApiKey);
+        } else {
+          await storageManager.removeCredential(AIProvider.GOOGLE);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync Google key:", error);
+      }
+    };
+    sync();
+  }, [clientApiKey, storageReady, storageManager]);
 
+  // Auto-sync clientAnthropicKey changes to encrypted storage
   useEffect(() => {
-    if (clientOpenaiKey) {
-      localStorage.setItem("osy_key_openai", clientOpenaiKey);
-    } else {
-      localStorage.removeItem("osy_key_openai");
-    }
-  }, [clientOpenaiKey]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (clientAnthropicKey) {
+          await storageManager.setCredential(AIProvider.ANTHROPIC, clientAnthropicKey);
+        } else {
+          await storageManager.removeCredential(AIProvider.ANTHROPIC);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync Anthropic key:", error);
+      }
+    };
+    sync();
+  }, [clientAnthropicKey, storageReady, storageManager]);
 
+  // Auto-sync clientOpenaiKey changes to encrypted storage
   useEffect(() => {
-    if (activeProvider) {
-      localStorage.setItem("osy_active_provider", activeProvider);
-    }
-  }, [activeProvider]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (clientOpenaiKey) {
+          await storageManager.setCredential(AIProvider.OPENAI, clientOpenaiKey);
+        } else {
+          await storageManager.removeCredential(AIProvider.OPENAI);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync OpenAI key:", error);
+      }
+    };
+    sync();
+  }, [clientOpenaiKey, storageReady, storageManager]);
 
+  // Auto-sync activeProvider changes to encrypted storage
   useEffect(() => {
-    if (activeModelId) {
-      localStorage.setItem("osy_active_model_id", activeModelId);
-    }
-  }, [activeModelId]);
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (activeProvider) {
+          await storageManager.setAppState(StorageKey.ACTIVE_PROVIDER, activeProvider);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync provider:", error);
+      }
+    };
+    sync();
+  }, [activeProvider, storageReady, storageManager]);
+
+  // Auto-sync activeModelId changes to encrypted storage
+  useEffect(() => {
+    if (!storageReady) return;
+    const sync = async () => {
+      try {
+        if (activeModelId) {
+          await storageManager.setAppState(StorageKey.ACTIVE_MODEL_ID, activeModelId);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync model ID:", error);
+      }
+    };
+    sync();
+  }, [activeModelId, storageReady, storageManager]);
 
   // Export all conversations to a JSON file
   const exportChats = () => {
@@ -585,28 +672,48 @@ export default function Home() {
 
   // Load saved draft on active conversation switch or initial load
   useEffect(() => {
-    if (typeof window !== "undefined" && activeId) {
-      const savedDraft = localStorage.getItem(`gemini_input_draft_${activeId}`);
-      if (savedDraft !== null) {
-        setInput(savedDraft);
-      } else {
+    if (!storageReady || !activeId) {
+      setInput("");
+      return;
+    }
+    
+    const loadDraft = async () => {
+      try {
+        const draftKey = `gemini_input_draft_${activeId}`;
+        const draft = await storageManager.getAppState(draftKey as any);
+        if (draft) {
+          setInput(draft);
+        } else {
+          setInput("");
+        }
+      } catch (error) {
+        console.error("[v0] Failed to load draft:", error);
         setInput("");
       }
-    } else {
-      setInput("");
-    }
-  }, [activeId]);
+    };
+    
+    loadDraft();
+  }, [activeId, storageReady, storageManager]);
 
-  // Auto-sync input drafts to localStorage
+  // Auto-sync input drafts to encrypted storage
   useEffect(() => {
-    if (typeof window !== "undefined" && activeId) {
-      if (input.trim()) {
-        localStorage.setItem(`gemini_input_draft_${activeId}`, input);
-      } else {
-        localStorage.removeItem(`gemini_input_draft_${activeId}`);
+    if (!storageReady || !activeId) return;
+    
+    const sync = async () => {
+      try {
+        const draftKey = `gemini_input_draft_${activeId}`;
+        if (input.trim()) {
+          await storageManager.setAppState(draftKey as any, input);
+        } else {
+          await storageManager.removeAppState(draftKey as any);
+        }
+      } catch (error) {
+        console.error("[v0] Failed to sync draft:", error);
       }
-    }
-  }, [input, activeId]);
+    };
+    
+    sync();
+  }, [input, activeId, storageReady, storageManager]);
 
   const activeConversation = conversations.find((c) => c.id === activeId);
 
@@ -863,9 +970,58 @@ export default function Home() {
               }
             : c
         );
-        localStorage.setItem("gemini_wrapper_chats", JSON.stringify(final));
+        // Storage sync happens automatically via useEffect
         return final;
       });
+
+      // Handle Arena Mode streaming if enabled
+      if (isArenaMode) {
+        setArenaStreamingA(true);
+        setArenaStreamingB(true);
+        
+        streamDualResponse(
+          updatedMessages,
+          arenaProviderA,
+          arenaProviderB,
+          clientApiKey,
+          clientAnthropicKey,
+          clientOpenaiKey,
+          useThinking,
+          activeModelId,
+          // onChunkA
+          (chunk) => {
+            if (chunk.text) {
+              setArenaResponseA((prev) => prev + chunk.text);
+            }
+            if (chunk.sources) {
+              setArenaSourcesA(chunk.sources);
+            }
+          },
+          // onChunkB
+          (chunk) => {
+            if (chunk.text) {
+              setArenaResponseB((prev) => prev + chunk.text);
+            }
+            if (chunk.sources) {
+              setArenaSourcesB(chunk.sources);
+            }
+          },
+          // onErrorA
+          (error) => {
+            setArenaResponseA(`Error: ${error}`);
+            setArenaStreamingA(false);
+          },
+          // onErrorB
+          (error) => {
+            setArenaResponseB(`Error: ${error}`);
+            setArenaStreamingB(false);
+          },
+          // onCompleteA
+          () => setArenaStreamingA(false),
+          // onCompleteB
+          () => setArenaStreamingB(false)
+        );
+      }
 
     } catch (err: any) {
       console.error("Failed to generate stream response:", err);
@@ -886,7 +1042,7 @@ export default function Home() {
               }
             : c
         );
-        localStorage.setItem("gemini_wrapper_chats", JSON.stringify(final));
+        // Storage sync happens automatically via useEffect
         return final;
       });
       
@@ -1127,102 +1283,231 @@ export default function Home() {
             
             {/* Model Display Selector */}
             <div className="relative">
-              <div 
-                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                className="flex items-center gap-2 bg-white/[0.015] hover:bg-white/[0.04] px-3.5 py-1.5 rounded-full border border-white/[0.03] text-[11px] font-semibold tracking-wide text-zinc-300 hover:text-white cursor-pointer transition-all duration-200 active:scale-95"
-              >
-                <GeminiSpark className="w-3.5 h-3.5" active={isStreaming} />
-                <span>{getActiveModelName()}</span>
-                <ChevronDown size={11} className="text-zinc-500 ml-0.5" />
-              </div>
+              {(() => {
+                const hasKey = 
+                  activeProvider === 'google' ? clientApiKey : 
+                  activeProvider === 'anthropic' ? clientAnthropicKey : 
+                  clientOpenaiKey;
+                
+                // Static classes based on provider and key status
+                const getBaseClasses = () => {
+                  const base = 'flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[11px] font-semibold tracking-wide cursor-pointer transition-all duration-200 active:scale-95';
+                  
+                  if (!hasKey) {
+                    return `${base} bg-red-500/5 hover:bg-red-500/10 border-red-500/20 text-red-400 hover:text-red-300`;
+                  }
+                  
+                  if (activeProvider === 'google') {
+                    return `${base} bg-indigo-500/5 hover:bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:text-indigo-200`;
+                  } else if (activeProvider === 'anthropic') {
+                    return `${base} bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/20 text-amber-300 hover:text-amber-200`;
+                  } else {
+                    return `${base} bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:text-emerald-200`;
+                  }
+                };
+
+                const getStatusDotClasses = () => {
+                  if (!hasKey) return 'bg-red-500';
+                  if (activeProvider === 'google') return 'bg-indigo-400';
+                  if (activeProvider === 'anthropic') return 'bg-amber-400';
+                  return 'bg-emerald-400';
+                };
+                
+                return (
+                  <div 
+                    onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                    className={getBaseClasses()}
+                  >
+                    <GeminiSpark className="w-3.5 h-3.5" active={isStreaming} />
+                    <span>{getActiveModelName()}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${getStatusDotClasses()}`} />
+                    <ChevronDown size={11} className="text-zinc-500 ml-0.5" />
+                  </div>
+                );
+              })()}
+              
 
               {isModelDropdownOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setIsModelDropdownOpen(false)} />
-                  <div className="absolute left-0 mt-2 w-56 rounded-2xl border border-white/[0.04] bg-[#0c0c0e]/95 backdrop-blur-xl p-2.5 shadow-2xl z-40 select-none animate-scale-up">
-                    <div className="px-2.5 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-white/[0.02] mb-1.5">
-                      Select AI Intelligence
+                  <div className="absolute left-0 mt-2 w-80 rounded-2xl border border-white/[0.04] bg-[#0c0c0e]/95 backdrop-blur-xl p-3 shadow-2xl z-40 select-none animate-scale-up">
+                    {/* Header */}
+                    <div className="px-2 py-2 mb-2">
+                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">AI Models</h3>
                     </div>
+
+                    {/* Providers Section */}
+                    <div className="space-y-2 mb-3 pb-3 border-b border-white/[0.02]">
+                      {(['google', 'anthropic', 'openai'] as const).map((provider) => {
+                        const config = PROVIDER_CONFIG[provider];
+                        const hasKey = 
+                          provider === 'google' ? clientApiKey : 
+                          provider === 'anthropic' ? clientAnthropicKey : 
+                          clientOpenaiKey;
+                        const isActive = activeProvider === provider;
+                        
+                        // Get static classes based on provider
+                        const getProviderClasses = () => {
+                          const base = 'px-3 py-2.5 rounded-xl border transition-all cursor-pointer';
+                          const disabledClass = !hasKey ? 'opacity-50 cursor-not-allowed' : '';
+                          
+                          if (provider === 'google') {
+                            return `${base} ${isActive ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
+                          } else if (provider === 'anthropic') {
+                            return `${base} ${isActive ? 'bg-amber-500/10 border-amber-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
+                          } else {
+                            return `${base} ${isActive ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
+                          }
+                        };
+
+                        const getDotAndTextClasses = () => {
+                          if (provider === 'google') {
+                            return {
+                              dot: 'bg-indigo-500',
+                              text: isActive ? 'text-indigo-300' : 'text-zinc-300'
+                            };
+                          } else if (provider === 'anthropic') {
+                            return {
+                              dot: 'bg-amber-500',
+                              text: isActive ? 'text-amber-300' : 'text-zinc-300'
+                            };
+                          } else {
+                            return {
+                              dot: 'bg-emerald-500',
+                              text: isActive ? 'text-emerald-300' : 'text-zinc-300'
+                            };
+                          }
+                        };
+                        
+                        const classes = getDotAndTextClasses();
+                        
+                        return (
+                          <div 
+                            key={provider}
+                            onClick={() => {
+                              if (hasKey) {
+                                setActiveProvider(provider);
+                                const firstModel = config.models[0];
+                                setActiveModelId(firstModel.id);
+                                if (firstModel.supportsThinking) {
+                                  setUseThinking(false);
+                                }
+                              }
+                            }}
+                            className={getProviderClasses()}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className={`w-1.5 h-1.5 rounded-full ${classes.dot}`} />
+                                  <span className={`text-xs font-semibold ${classes.text}`}>
+                                    {config.name}
+                                  </span>
+                                  {hasKey ? (
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      <div className="w-1 h-1 rounded-full bg-green-500" />
+                                      <span className="text-[9px] text-green-600 font-mono">KEY</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      <div className="w-1 h-1 rounded-full bg-red-500" />
+                                      <span className="text-[9px] text-red-600 font-mono">SETUP</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-zinc-500">{config.description}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Models Section for Active Provider */}
                     <div className="space-y-1">
-                      <button
-                        onClick={() => {
-                          setActiveProvider("google");
-                          setActiveModelId("gemini-3.5-flash");
-                          setUseThinking(false);
-                          setIsModelDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                          activeProvider === "google" && !useThinking
-                            ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/10"
-                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "google" && !useThinking ? "bg-indigo-400" : "bg-transparent"}`} />
-                          <span>Gemini 3.5 Flash</span>
-                        </div>
-                        <span className="text-[9px] text-zinc-600 font-mono">GOOGLE</span>
-                      </button>
+                      <div className="px-2 py-1 text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                        Models
+                      </div>
+                      {PROVIDER_CONFIG[activeProvider].models.map((model) => {
+                        const isSelected = 
+                          activeProvider === model.provider && 
+                          activeModelId === model.id &&
+                          (model.supportsThinking ? useThinking : !useThinking);
 
-                      <button
-                        onClick={() => {
-                          setActiveProvider("google");
-                          setActiveModelId("gemini-3.1-pro-preview");
-                          setUseThinking(true);
-                          setIsModelDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                          activeProvider === "google" && useThinking
-                            ? "bg-purple-500/10 text-purple-400 border border-purple-500/10"
-                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "google" && useThinking ? "bg-purple-400" : "bg-transparent"}`} />
-                          <span>Gemini 3.1 Pro (Thinking)</span>
-                        </div>
-                        <span className="text-[9px] text-zinc-600 font-mono">GOOGLE</span>
-                      </button>
+                        const getModelClasses = () => {
+                          const base = 'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all';
+                          
+                          if (activeProvider === 'google') {
+                            return `${base} ${isSelected ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/20' : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/[0.02] border border-transparent'}`;
+                          } else if (activeProvider === 'anthropic') {
+                            return `${base} ${isSelected ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20' : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/[0.02] border border-transparent'}`;
+                          } else {
+                            return `${base} ${isSelected ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/[0.02] border border-transparent'}`;
+                          }
+                        };
 
-                      <button
-                        onClick={() => {
-                          setActiveProvider("anthropic");
-                          setActiveModelId("claude-3-7-sonnet");
-                          setUseThinking(false);
-                          setIsModelDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                          activeProvider === "anthropic"
-                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/10"
-                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "anthropic" ? "bg-amber-400" : "bg-transparent"}`} />
-                          <span>Claude 3.7 Sonnet</span>
-                        </div>
-                        <span className="text-[9px] text-zinc-600 font-mono">BYOK</span>
-                      </button>
+                        const getDotClasses = () => {
+                          if (activeProvider === 'google') {
+                            return isSelected ? 'bg-indigo-400' : 'bg-transparent';
+                          } else if (activeProvider === 'anthropic') {
+                            return isSelected ? 'bg-amber-400' : 'bg-transparent';
+                          } else {
+                            return isSelected ? 'bg-emerald-400' : 'bg-transparent';
+                          }
+                        };
 
-                      <button
-                        onClick={() => {
-                          setActiveProvider("openai");
-                          setActiveModelId("gpt-4o");
-                          setUseThinking(false);
-                          setIsModelDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                          activeProvider === "openai"
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/10"
-                            : "text-zinc-400 hover:text-white hover:bg-white/[0.02] border border-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-1.5 h-1.5 rounded-full ${activeProvider === "openai" ? "bg-emerald-400" : "bg-transparent"}`} />
-                          <span>GPT-4o</span>
+                        return (
+                          <button
+                            key={model.id}
+                            onClick={() => {
+                              setActiveModelId(model.id);
+                              if (model.supportsThinking) {
+                                setUseThinking(false);
+                              }
+                              setIsModelDropdownOpen(false);
+                            }}
+                            className={getModelClasses()}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={`w-1.5 h-1.5 rounded-full ${getDotClasses()}`} />
+                              <div className="text-left">
+                                <div>{model.name}</div>
+                                {model.capabilities && (
+                                  <div className="text-[9px] text-zinc-600">
+                                    {model.capabilities.join(' • ')}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <span className={`text-[9px] font-mono opacity-60 ${isSelected ? 'opacity-100' : ''}`}>
+                              {Math.round(model.contextWindow / 1000)}K
+                            </span>
+                          </button>
+                        );
+                      })}
+
+                      {/* Thinking Mode Toggle for Google */}
+                      {activeProvider === 'google' && (
+                        <div className="mt-3 pt-2 border-t border-white/[0.02]">
+                          <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.02] cursor-pointer transition-all">
+                            <input
+                              type="checkbox"
+                              checked={useThinking}
+                              onChange={(e) => {
+                                setUseThinking(e.target.checked);
+                                if (e.target.checked) {
+                                  setActiveModelId("gemini-3.1-pro-preview");
+                                } else {
+                                  setActiveModelId("gemini-3.5-flash");
+                                }
+                              }}
+                              className="w-3.5 h-3.5 rounded border-zinc-600 text-indigo-500 focus:ring-0 cursor-pointer"
+                            />
+                            <span className="text-xs text-zinc-300 font-medium">Extended Thinking</span>
+                            <span className="text-[9px] text-zinc-600 ml-auto">Slow but Deep</span>
+                          </label>
                         </div>
-                        <span className="text-[9px] text-zinc-600 font-mono">BYOK</span>
-                      </button>
+                      )}
                     </div>
                   </div>
                 </>
@@ -1261,11 +1546,51 @@ export default function Home() {
               )}
             </div>
 
+            <button
+              onClick={() => setIsArenaMode(!isArenaMode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                isArenaMode
+                  ? "bg-indigo-950/30 border-indigo-500/30 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.1)]"
+                  : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+              }`}
+              title="Toggle Arena Mode (Compare Models)"
+            >
+              <span>Arena</span>
+            </button>
+
             <div className="w-7 h-7 rounded-full bg-zinc-900 border border-white/[0.08] flex items-center justify-center font-bold text-zinc-400 text-[10px] select-none shadow-sm">
               P
             </div>
           </div>
         </header>
+
+        {/* Arena Mode Header */}
+        {isArenaMode && (
+          <ArenaHeader
+            isOpen={isArenaMode}
+            onToggle={setIsArenaMode}
+            providerA={arenaProviderA}
+            providerB={arenaProviderB}
+            onProviderAChange={setArenaProviderA}
+            onProviderBChange={setArenaProviderB}
+            streamingA={arenaStreamingA}
+            streamingB={arenaStreamingB}
+          />
+        )}
+
+        {/* Arena Panes */}
+        {isArenaMode && (arenaResponseA || arenaResponseB || arenaStreamingA || arenaStreamingB) && (
+          <ArenaPanes
+            providerA={arenaProviderA}
+            providerB={arenaProviderB}
+            responseA={arenaResponseA}
+            responseB={arenaResponseB}
+            streamingA={arenaStreamingA}
+            streamingB={arenaStreamingB}
+            sourcesA={arenaSourcesA}
+            sourcesB={arenaSourcesB}
+          />
+        )}
 
         {/* Chat Scrolling Area */}
         <main className="flex-1 overflow-y-auto py-6 z-10 scrollbar-thin scrollbar-thumb-white/[0.02]">
@@ -1654,154 +1979,241 @@ export default function Home() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="bg-[#0c0c0e]/95 border border-white/[0.04] rounded-3xl p-6 max-w-md w-full shadow-[0_24px_50px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-2xl"
+              className="bg-[#0c0c0e]/95 border border-white/[0.04] rounded-3xl p-6 max-w-2xl w-full shadow-[0_24px_50px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-2xl max-h-[85vh] overflow-y-auto"
             >
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-              
-              <div className="flex items-start gap-4 mb-5">
-                <div className="w-10 h-10 rounded-full bg-white/[0.02] border border-white/[0.03] flex items-center justify-center text-indigo-400 flex-shrink-0 shadow-inner">
-                  <Key size={18} />
-                </div>
-                <div>
-                  <h3 className="text-md font-bold text-white tracking-tight">Encryption Key Vault</h3>
-                  <p className="text-[11px] text-neutral-500 mt-1 leading-relaxed font-medium">
-                    Keys are encrypted locally and stored in your browser&apos;s localStorage. They never touch our servers and are sent directly to API endpoints.
-                  </p>
+              {/* Header */}
+              <div className="mb-6">
+                <div className="flex items-start gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-white/[0.05] flex items-center justify-center text-indigo-400 flex-shrink-0">
+                    <Key size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white tracking-tight">Manage API Keys</h3>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                      Keys are encrypted locally in your browser and never sent to our servers
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {/* Google Gemini Key */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
-                      Google Gemini Key
-                    </label>
-                    <a
-                      href="https://aistudio.google.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[9px] text-indigo-400 hover:underline inline-flex items-center gap-0.5"
-                    >
-                      Get Key <ExternalLink size={7} />
-                    </a>
-                  </div>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showKeyText ? "text" : "password"}
-                      value={tempGoogleKey}
-                      onChange={(e) => setTempGoogleKey(e.target.value)}
-                      placeholder={clientApiKey ? "••••••••••••••••" : "AIzaSy..."}
-                      className="w-full bg-[#070709]/80 border border-white/[0.04] focus:border-indigo-500/50 rounded-xl px-3 py-2.5 text-xs text-neutral-200 placeholder-neutral-700 outline-none pr-12 font-mono transition-all"
-                    />
-                  </div>
-                </div>
+              {/* Provider Cards */}
+              <div className="grid grid-cols-1 gap-4 mb-6">
+                {/* Google */}
+                {(() => {
+                  const hasKey = clientApiKey.length > 0;
+                  const isModified = tempGoogleKey !== clientApiKey && tempGoogleKey.trim() !== "";
+                  
+                  const getStatusColor = () => {
+                    if (isModified) return 'indigo-600';
+                    if (hasKey) return 'indigo-500/30';
+                    return 'white/5';
+                  };
+                  
+                  const getStatusBorder = () => {
+                    if (isModified) return 'border-indigo-500/50';
+                    if (hasKey) return 'border-indigo-500/20';
+                    return 'border-white/10';
+                  };
+                  
+                  return (
+                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                          <div>
+                            <h4 className="text-sm font-semibold text-indigo-300">Google Gemini</h4>
+                            <p className="text-[10px] text-zinc-500">Fast & versatile models</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                          <a
+                            href="https://aistudio.google.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[9px] text-indigo-400 hover:text-indigo-300 transition-colors inline-flex items-center gap-1"
+                          >
+                            Get Key <ExternalLink size={8} />
+                          </a>
+                        </div>
+                      </div>
+                      <input
+                        type={showKeyText ? "text" : "password"}
+                        value={tempGoogleKey}
+                        onChange={(e) => setTempGoogleKey(e.target.value)}
+                        onBlur={(e) => setTempGoogleKey(e.target.value.trim())}
+                        placeholder="AIzaSy..."
+                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-indigo-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
+                      />
+                    </div>
+                  );
+                })()}
 
-                {/* Anthropic Claude Key */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
-                      Anthropic Claude Key (BYOK)
-                    </label>
-                    <a
-                      href="https://console.anthropic.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[9px] text-amber-400 hover:underline inline-flex items-center gap-0.5"
-                    >
-                      Get Key <ExternalLink size={7} />
-                    </a>
-                  </div>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showKeyText ? "text" : "password"}
-                      value={tempAnthropicKey}
-                      onChange={(e) => setTempAnthropicKey(e.target.value)}
-                      placeholder={clientAnthropicKey ? "••••••••••••••••" : "sk-ant-..."}
-                      className="w-full bg-[#070709]/80 border border-white/[0.04] focus:border-amber-500/50 rounded-xl px-3 py-2.5 text-xs text-neutral-200 placeholder-neutral-700 outline-none pr-12 font-mono transition-all"
-                    />
-                  </div>
-                </div>
+                {/* Anthropic */}
+                {(() => {
+                  const hasKey = clientAnthropicKey.length > 0;
+                  const isModified = tempAnthropicKey !== clientAnthropicKey && tempAnthropicKey.trim() !== "";
+                  
+                  const getStatusColor = () => {
+                    if (isModified) return 'amber-600';
+                    if (hasKey) return 'amber-500/30';
+                    return 'white/5';
+                  };
+                  
+                  const getStatusBorder = () => {
+                    if (isModified) return 'border-amber-500/50';
+                    if (hasKey) return 'border-amber-500/20';
+                    return 'border-white/10';
+                  };
+                  
+                  return (
+                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-amber-400" />
+                          <div>
+                            <h4 className="text-sm font-semibold text-amber-300">Anthropic Claude</h4>
+                            <p className="text-[10px] text-zinc-500">Thoughtful reasoning (BYOK)</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                          <a
+                            href="https://console.anthropic.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[9px] text-amber-400 hover:text-amber-300 transition-colors inline-flex items-center gap-1"
+                          >
+                            Get Key <ExternalLink size={8} />
+                          </a>
+                        </div>
+                      </div>
+                      <input
+                        type={showKeyText ? "text" : "password"}
+                        value={tempAnthropicKey}
+                        onChange={(e) => setTempAnthropicKey(e.target.value)}
+                        onBlur={(e) => setTempAnthropicKey(e.target.value.trim())}
+                        placeholder="sk-ant-..."
+                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-amber-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
+                      />
+                    </div>
+                  );
+                })()}
 
-                {/* OpenAI GPT Key */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block">
-                      OpenAI GPT Key (BYOK)
-                    </label>
-                    <a
-                      href="https://platform.openai.com/api-keys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[9px] text-emerald-400 hover:underline inline-flex items-center gap-0.5"
-                    >
-                      Get Key <ExternalLink size={7} />
-                    </a>
-                  </div>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showKeyText ? "text" : "password"}
-                      value={tempOpenaiKey}
-                      onChange={(e) => setTempOpenaiKey(e.target.value)}
-                      placeholder={clientOpenaiKey ? "••••••••••••••••" : "sk-..."}
-                      className="w-full bg-[#070709]/80 border border-white/[0.04] focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-xs text-neutral-200 placeholder-neutral-700 outline-none pr-12 font-mono transition-all"
-                    />
-                  </div>
-                </div>
+                {/* OpenAI */}
+                {(() => {
+                  const hasKey = clientOpenaiKey.length > 0;
+                  const isModified = tempOpenaiKey !== clientOpenaiKey && tempOpenaiKey.trim() !== "";
+                  
+                  const getStatusColor = () => {
+                    if (isModified) return 'emerald-600';
+                    if (hasKey) return 'emerald-500/30';
+                    return 'white/5';
+                  };
+                  
+                  const getStatusBorder = () => {
+                    if (isModified) return 'border-emerald-500/50';
+                    if (hasKey) return 'border-emerald-500/20';
+                    return 'border-white/10';
+                  };
+                  
+                  return (
+                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                          <div>
+                            <h4 className="text-sm font-semibold text-emerald-300">OpenAI GPT</h4>
+                            <p className="text-[10px] text-zinc-500">Powerful & multimodal (BYOK)</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                          <a
+                            href="https://platform.openai.com/api-keys"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[9px] text-emerald-400 hover:text-emerald-300 transition-colors inline-flex items-center gap-1"
+                          >
+                            Get Key <ExternalLink size={8} />
+                          </a>
+                        </div>
+                      </div>
+                      <input
+                        type={showKeyText ? "text" : "password"}
+                        value={tempOpenaiKey}
+                        onChange={(e) => setTempOpenaiKey(e.target.value)}
+                        onBlur={(e) => setTempOpenaiKey(e.target.value.trim())}
+                        placeholder="sk-..."
+                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-emerald-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
 
-                <div className="flex items-center justify-between px-1 pt-1">
+              {/* Footer */}
+              <div className="border-t border-white/[0.05] pt-4">
+                <div className="flex items-center justify-between mb-4">
                   <button
                     type="button"
                     onClick={() => setShowKeyText(!showKeyText)}
-                    className="text-neutral-500 hover:text-neutral-200 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1"
+                    className="text-zinc-500 hover:text-zinc-300 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1.5 transition-colors"
                   >
-                    <span>Visibility:</span>
-                    <span className="text-zinc-400">{showKeyText ? "Revealed" : "Masked"}</span>
+                    <Eye size={12} />
+                    <span>{showKeyText ? "Hide Keys" : "Show Keys"}</span>
                   </button>
-                  <span className="text-[9px] text-neutral-500 font-mono">Secure Local Storage</span>
+                  <span className="text-[9px] text-zinc-600 font-mono">🔐 Encrypted locally</span>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-white/[0.02]">
-                <button
-                  onClick={() => setIsKeyModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-neutral-500 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setClientApiKey(tempGoogleKey.trim());
-                    setClientAnthropicKey(tempAnthropicKey.trim());
-                    setClientOpenaiKey(tempOpenaiKey.trim());
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setIsKeyModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // Update state first
+                      setClientApiKey(tempGoogleKey.trim());
+                      setClientAnthropicKey(tempAnthropicKey.trim());
+                      setClientOpenaiKey(tempOpenaiKey.trim());
 
-                    if (tempGoogleKey.trim()) {
-                      localStorage.setItem("gemini_client_api_key", tempGoogleKey.trim());
-                      localStorage.setItem("osy_key_google", tempGoogleKey.trim());
-                    } else {
-                      localStorage.removeItem("gemini_client_api_key");
-                      localStorage.removeItem("osy_key_google");
-                    }
+                      // Storage sync happens automatically via useEffect hooks
+                      // but we explicitly sync here for immediate feedback
+                      try {
+                        if (tempGoogleKey.trim()) {
+                          await storageManager.setCredential(AIProvider.GOOGLE, tempGoogleKey.trim());
+                        } else {
+                          await storageManager.removeCredential(AIProvider.GOOGLE);
+                        }
 
-                    if (tempAnthropicKey.trim()) {
-                      localStorage.setItem("osy_key_anthropic", tempAnthropicKey.trim());
-                    } else {
-                      localStorage.removeItem("osy_key_anthropic");
-                    }
+                        if (tempAnthropicKey.trim()) {
+                          await storageManager.setCredential(AIProvider.ANTHROPIC, tempAnthropicKey.trim());
+                        } else {
+                          await storageManager.removeCredential(AIProvider.ANTHROPIC);
+                        }
 
-                    if (tempOpenaiKey.trim()) {
-                      localStorage.setItem("osy_key_openai", tempOpenaiKey.trim());
-                    } else {
-                      localStorage.removeItem("osy_key_openai");
-                    }
+                        if (tempOpenaiKey.trim()) {
+                          await storageManager.setCredential(AIProvider.OPENAI, tempOpenaiKey.trim());
+                        } else {
+                          await storageManager.removeCredential(AIProvider.OPENAI);
+                        }
+                      } catch (error) {
+                        console.error("[v0] Failed to save keys:", error);
+                        showNotification("Failed to save vault", "error");
+                        return;
+                      }
 
-                    setIsKeyModalOpen(false);
-                    showNotification("Vault saved securely!", "success");
-                  }}
-                  className="px-5 py-2 bg-white hover:bg-neutral-100 text-[#070709] font-bold text-xs rounded-xl transition-all shadow-md active:scale-95"
-                >
-                  Save Vault
-                </button>
+                      setIsKeyModalOpen(false);
+                      showNotification("Vault saved securely!", "success");
+                    }}
+                    className="px-5 py-2 bg-white hover:bg-gray-100 text-zinc-900 font-bold text-xs rounded-lg transition-all shadow-md active:scale-95"
+                  >
+                    Save Keys
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
