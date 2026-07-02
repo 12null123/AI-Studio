@@ -222,7 +222,7 @@ export default function Home() {
   
   // Quick settings toggles (applies to the next prompt)
   const [useThinking, setUseThinking] = useState(false);
-  const useSearch = false;
+  const [useSearch, setUseSearch] = useState(false);
   
   // Editing a past chat title
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -287,10 +287,10 @@ export default function Home() {
       return useThinking ? "Gemini 3.1 Pro" : "Gemini 3.5 Flash";
     }
     if (activeProvider === "anthropic") {
-      return "Claude 3.7 Sonnet";
+      return "Claude Sonnet 5";
     }
     if (activeProvider === "openai") {
-      return "GPT-4o";
+      return "GPT-5.5";
     }
     return "Gemini 3.5 Flash";
   };
@@ -987,6 +987,7 @@ export default function Home() {
           clientAnthropicKey,
           clientOpenaiKey,
           useThinking,
+          useSearch,
           activeModelId,
           // onChunkA
           (chunk) => {
@@ -1909,6 +1910,19 @@ export default function Home() {
                      <Sparkles size={14} />
                    </button>
                    <button
+                     onClick={() => {
+                       setUseSearch(!useSearch);
+                     }}
+                     className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
+                       useSearch
+                         ? "bg-blue-950/40 text-blue-300 border border-blue-800/40 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
+                         : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
+                     }`}
+                     title="Search Grounding"
+                   >
+                     <Globe size={14} />
+                   </button>
+                   <button
                      onClick={() => setIsKeyModalOpen(true)}
                      className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
                        (activeProvider === "google" ? clientApiKey : activeProvider === "anthropic" ? clientAnthropicKey : clientOpenaiKey)
@@ -1927,6 +1941,13 @@ export default function Home() {
                     <div className="hidden sm:flex items-center gap-1 pl-1">
                       <span className="text-[9px] font-bold text-purple-400 bg-purple-950/20 border border-purple-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
                         Thinking Mode
+                      </span>
+                    </div>
+                  )}
+                  {useSearch && (
+                    <div className="hidden sm:flex items-center gap-1 pl-1">
+                      <span className="text-[9px] font-bold text-blue-400 bg-blue-950/20 border border-blue-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Search Grounding
                       </span>
                     </div>
                   )}

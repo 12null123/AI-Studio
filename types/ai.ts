@@ -31,7 +31,7 @@ export const SUPPORTED_MODELS: ModelConfig[] = [
     name: 'Gemini 3.5 Flash', 
     provider: 'google', 
     contextWindow: 1048576,
-    capabilities: ['Fast', 'Vision'],
+    capabilities: ['Fast', 'Vision', 'Search Grounding'],
     supportsThinking: false,
     byokRequired: false
   },
@@ -44,9 +44,36 @@ export const SUPPORTED_MODELS: ModelConfig[] = [
     supportsThinking: true,
     byokRequired: false
   },
+  {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    provider: 'google',
+    contextWindow: 1000000,
+    capabilities: ['Fast'],
+    supportsThinking: false,
+    byokRequired: false
+  },
   { 
-    id: 'claude-3-7-sonnet', 
-    name: 'Claude 3.7 Sonnet', 
+    id: 'claude-sonnet-5', 
+    name: 'Claude Sonnet 5', 
+    provider: 'anthropic', 
+    contextWindow: 200000,
+    capabilities: ['Agentic', 'Coding'],
+    supportsThinking: false,
+    byokRequired: true
+  },
+  { 
+    id: 'claude-fable-5', 
+    name: 'Claude Fable 5', 
+    provider: 'anthropic', 
+    contextWindow: 200000,
+    capabilities: ['Mythos Reasoning'],
+    supportsThinking: true,
+    byokRequired: true
+  },
+  { 
+    id: 'claude-opus-4-8', 
+    name: 'Claude Opus 4.8', 
     provider: 'anthropic', 
     contextWindow: 200000,
     capabilities: ['Balanced'],
@@ -54,11 +81,38 @@ export const SUPPORTED_MODELS: ModelConfig[] = [
     byokRequired: true
   },
   { 
-    id: 'gpt-4o', 
-    name: 'GPT-4o', 
+    id: 'gpt-5.5', 
+    name: 'GPT-5.5', 
     provider: 'openai', 
     contextWindow: 128000,
     capabilities: ['Multimodal'],
+    supportsThinking: false,
+    byokRequired: true
+  },
+  { 
+    id: 'gpt-5.5-pro', 
+    name: 'GPT-5.5 Pro', 
+    provider: 'openai', 
+    contextWindow: 128000,
+    capabilities: ['Reasoning'],
+    supportsThinking: true,
+    byokRequired: true
+  },
+  { 
+    id: 'gpt-5.4', 
+    name: 'GPT-5.4', 
+    provider: 'openai', 
+    contextWindow: 128000,
+    capabilities: ['Standard'],
+    supportsThinking: false,
+    byokRequired: true
+  },
+  { 
+    id: 'gpt-5.4-mini', 
+    name: 'GPT-5.4 Mini', 
+    provider: 'openai', 
+    contextWindow: 128000,
+    capabilities: ['Fast'],
     supportsThinking: false,
     byokRequired: true
   }

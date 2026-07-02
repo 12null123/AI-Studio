@@ -15,22 +15,27 @@ const IV_SIZE = 12; // bytes (96 bits recommended for GCM)
 async function deriveKey(): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   
-  // Get or create a persistent salt in sessionStorage (changes per session)
-  let salt = sessionStorage.getItem('_osy_salt');
+  // Get or create a persistent salt in localStorage (persists across sessions)
+  let salt = localStorage.getItem('_osy_salt');
   if (!salt) {
     const saltBytes = crypto.getRandomValues(new Uint8Array(16));
     salt = Array.from(saltBytes)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-    sessionStorage.setItem('_osy_salt', salt);
+    localStorage.setItem('_osy_salt', salt);
   }
 
   const saltBytes = new Uint8Array(
     salt.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
   );
 
-  // Use a combination of user-agent and current time as password
-  const password = `${navigator.userAgent}:${Math.floor(Date.now() / 86400000)}`;
+  // Use a combination of user-agent and persistent device id as password
+  let deviceId = localStorage.getItem('_osy_device_id');
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem('_osy_device_id', deviceId);
+  }
+  const password = `${navigator.userAgent}:${deviceId}`;
   
   const passwordKey = await crypto.subtle.importKey(
     'raw',

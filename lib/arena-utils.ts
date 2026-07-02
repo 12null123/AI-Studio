@@ -14,6 +14,7 @@ export async function streamDualResponse(
   clientAnthropicKey: string,
   clientOpenaiKey: string,
   useThinking: boolean,
+  useSearch: boolean,
   activeModelId: string,
   onChunkA: (chunk: StreamingMessage) => void,
   onChunkB: (chunk: StreamingMessage) => void,
@@ -43,7 +44,7 @@ export async function streamDualResponse(
         body: JSON.stringify({
           messages,
           useThinking,
-          useSearch: false,
+          useSearch,
           clientApiKey,
           provider,
           modelId: activeModelId,

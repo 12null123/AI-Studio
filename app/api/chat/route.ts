@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         config.thinkingConfig = {
           thinkingLevel: ThinkingLevel.HIGH,
         };
-      } else if (model === "gemini-3.5-flash") {
+      } else if (useSearch && model === "gemini-3.5-flash") {
         config.tools = [{ googleSearch: {} }];
       }
 
@@ -153,8 +153,8 @@ export async function POST(req: NextRequest) {
       timestamp: m.timestamp || Date.now()
     }));
 
-    const modelId = bodyModelId || (provider === "anthropic" ? "claude-3-7-sonnet" : "gpt-4o");
-    const payload = normalizePayload(provider, modelId, unifiedMsgs, { searchGrounding: false });
+    const modelId = bodyModelId || (provider === "anthropic" ? "claude-sonnet-5" : "gpt-5.5");
+    const payload = normalizePayload(provider, modelId, unifiedMsgs, { searchGrounding: useSearch });
 
     let targetUrl = "";
     const headers: Record<string, string> = { "Content-Type": "application/json" };
