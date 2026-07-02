@@ -116,60 +116,60 @@ export const SUPPORTED_MODELS: ModelConfig[] = [
     supportsThinking: false,
     byokRequired: true
   },
-  // OpenRouter Free Models (verified against production API)
-  {
-    id: 'openrouter/free',
-    name: 'OpenRouter Free Auto-Router',
-    provider: 'openrouter',
-    contextWindow: 32000,
-    capabilities: ['General', 'Fast', 'Auto-Fallback'],
-    supportsThinking: false,
-    byokRequired: true
+  export const OPENROUTER_FREE_MODELS: ModelConfig[] = [
+  { 
+    id: 'openrouter/free', 
+    name: 'OpenRouter Free Auto-Router', 
+    provider: 'openrouter', 
+    contextWindow: 32000, 
+    capabilities: ['General', 'Fast', 'Auto-Fallback'], 
+    supportsThinking: false, 
+    byokRequired: true 
   },
-  {
-    id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
-    name: 'NVIDIA: Nemotron 3 Ultra (Free)',
-    provider: 'openrouter',
-    contextWindow: 1000000,
-    capabilities: ['Reasoning', 'Programming', 'Finance'],
-    supportsThinking: true,
-    byokRequired: true
+  { 
+    id: 'nvidia/nemotron-3-ultra-550b-a55b:free', // Correct parameters verified for Ultra
+    name: 'NVIDIA: Nemotron 3 Ultra (Free)', 
+    provider: 'openrouter', 
+    contextWindow: 1000000, 
+    capabilities: ['Reasoning', 'Programming', 'Finance'], 
+    supportsThinking: true, 
+    byokRequired: true 
   },
-  {
-    id: 'poolside/laguna-m1:free',
-    name: 'Poolside: Laguna M.1 (Free)',
-    provider: 'openrouter',
-    contextWindow: 65536,
-    capabilities: ['Coding', 'Agentic'],
-    supportsThinking: false,
-    byokRequired: true
+  { 
+    id: 'nvidia/nemotron-3-super-120b-a12b:free', // Replaces broken slug to fix the "not a valid model ID" error
+    name: 'NVIDIA: Nemotron 3 Super (Free)', 
+    provider: 'openrouter', 
+    contextWindow: 1000000, 
+    capabilities: ['Academia', 'General', 'Programming'], 
+    supportsThinking: false, 
+    byokRequired: true 
   },
-  {
-    id: 'deepseek/deepseek-r1:free',
-    name: 'DeepSeek R1 (Free)',
-    provider: 'openrouter',
-    contextWindow: 163840,
-    capabilities: ['Reasoning', 'Debug', 'Deep-Thinking'],
-    supportsThinking: true,
-    byokRequired: true
+  { 
+    id: 'qwen/qwen3-coder-480b-a35b:free', // Re-verified exact full token architecture slug for Qwen
+    name: 'Qwen3 Coder (Free)', 
+    provider: 'openrouter', 
+    contextWindow: 32000, 
+    capabilities: ['Coding', 'Fast'], 
+    supportsThinking: false, 
+    byokRequired: true 
   },
-  {
-    id: 'nvidia/nemotron-3-super:free',
-    name: 'NVIDIA: Nemotron 3 Super (Free)',
-    provider: 'openrouter',
-    contextWindow: 65536,
-    capabilities: ['Academia', 'General', 'Programming'],
-    supportsThinking: false,
-    byokRequired: true
+  { 
+    id: 'deepseek/deepseek-r1:free', 
+    name: 'DeepSeek R1 (Free)', 
+    provider: 'openrouter', 
+    contextWindow: 163840, 
+    capabilities: ['Reasoning', 'Debug', 'Deep-Thinking'], 
+    supportsThinking: true, 
+    byokRequired: true 
   },
-  {
-    id: 'cohere/north-mini-code:free',
-    name: 'Cohere: North Mini Code (Free)',
-    provider: 'openrouter',
-    contextWindow: 16000,
-    capabilities: ['CLI', 'Terminal', 'Coding'],
-    supportsThinking: false,
-    byokRequired: true
+  { 
+    id: 'cohere/north-mini-code:free', 
+    name: 'Cohere: North Mini Code (Free)', 
+    provider: 'openrouter', 
+    contextWindow: 16000, 
+    capabilities: ['CLI', 'Terminal', 'Coding'], 
+    supportsThinking: false, 
+    byokRequired: true 
   }
 ];
 
