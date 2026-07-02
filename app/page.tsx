@@ -1856,7 +1856,7 @@ export default function Home() {
 
         {/* Bottom Input Bar - Fixed at bottom, doesn't scroll */}
         <div id="input-container" className="flex-shrink-0 bg-gradient-to-t from-[#070709] via-[#070709]/95 to-transparent pt-12 pb-6 z-10 border-t border-white/[0.04]">
-          <div className="max-w-3xl mx-auto w-full px-6">
+          <div className="max-w-2xl mx-auto w-full px-4 lg:px-8">
             
             {/* Input Bar Card */}
             <div className="bg-[#0c0c0f] border border-white/[0.04] rounded-2xl p-5 pb-4 flex flex-col gap-2 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.5),_0_16px_40px_rgba(0,0,0,0.7)] hover:border-white/[0.07] focus-within:border-zinc-700/40 focus-within:ring-1 focus-within:ring-white/[0.01]">
