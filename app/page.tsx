@@ -109,7 +109,6 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      
       // Smart language file extension map
       let extension = "txt";
       const lang = language.toLowerCase();
@@ -142,7 +141,6 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
   };
 
   const displayLanguage = language ? language.toUpperCase() : "CODE";
-
   return (
     <div className="group/code my-5 rounded-2xl border border-white/[0.04] bg-[#09090b]/90 overflow-hidden shadow-2xl backdrop-blur-sm transition-all duration-300 hover:border-white/[0.08]">
       <div className="flex items-center justify-between px-4 py-2.5 bg-[#0f0f11] border-b border-b-white/[0.03] text-xs font-mono text-neutral-400 select-none">
@@ -213,9 +211,7 @@ export default function Home() {
   
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
-
   const [activeId, setActiveId] = useState<string>("");
-
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -227,7 +223,7 @@ export default function Home() {
   // Editing a past chat title
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
-
+  
   // Custom client-side API key states for multi-provider
   const [clientApiKey, setClientApiKey] = useState<string>("");
   const [clientAnthropicKey, setClientAnthropicKey] = useState<string>("");
@@ -255,7 +251,7 @@ export default function Home() {
   const [arenaStreamingB, setArenaStreamingB] = useState(false);
   const [arenaSourcesA, setArenaSourcesA] = useState<Array<{ title: string; uri: string }>>([]);
   const [arenaSourcesB, setArenaSourcesB] = useState<Array<{ title: string; uri: string }>>([]);
-
+  
   // Floating toast notification state
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -265,7 +261,7 @@ export default function Home() {
       setNotification(null);
     }, 4000);
   };
-
+  
   // Claude-style attached files state
   interface PastedFile {
     id: string;
@@ -310,10 +306,10 @@ export default function Home() {
       return useThinking ? "Gemini 3.1 Pro" : "Gemini 3.5 Flash";
     }
     if (activeProvider === "anthropic") {
-      return "Claude Sonnet 5";
+      return useThinking ? "Claude Fable 5" : "Claude Sonnet 5";
     }
     if (activeProvider === "openai") {
-      return "GPT-5.5";
+      return useThinking ? "GPT-5.5 Pro" : "GPT-5.5";
     }
     return "Gemini 3.5 Flash";
   };
@@ -330,7 +326,7 @@ export default function Home() {
       e.preventDefault(); // Stop from inserting into textarea
       
       const newFileId = Math.random().toString(36).substring(7);
-      
+     
       // Deduce a clean title from the first line, falling back to "Pasted Text"
       let title = "Pasted Text";
       const firstLine = pastedText.split("\n")[0].trim().substring(0, 30);
@@ -347,7 +343,6 @@ export default function Home() {
         content: pastedText,
         size: pastedText.length
       };
-      
       setAttachedFiles((prev) => [...prev, newFile]);
       showNotification(`Large text auto-converted to document: ${newFile.name}`, "info");
     }
@@ -360,7 +355,7 @@ export default function Home() {
 
     // Check if it's text or code
     const isTextLike = 
-      file.type.startsWith("text/") || 
+      file.type.startsWith("text/") ||
       file.name.endsWith(".txt") || 
       file.name.endsWith(".js") || 
       file.name.endsWith(".jsx") || 
@@ -474,7 +469,7 @@ export default function Home() {
         
         const openaiKey = await storageManager.getCredential(AIProvider.OPENAI);
         if (openaiKey) setClientOpenaiKey(openaiKey);
-        
+
         const openrouterKey = await storageManager.getCredential(AIProvider.OPENROUTER);
         if (openrouterKey) setClientOpenrouterKey(openrouterKey);
         
@@ -616,7 +611,6 @@ export default function Home() {
       }
       const dataStr = JSON.stringify(conversations, null, 2);
       const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
-      
       const exportFileDefaultName = `gemini-chats-backup-${new Date().toISOString().slice(0, 10)}.json`;
       
       const linkElement = document.createElement("a");
@@ -798,20 +792,17 @@ export default function Home() {
 
     // Reset standard input
     if (!customPrompt) setInput("");
-
     // Use attached files if they exist and this is a user input submission (not starter prompt)
     const filesToSend = customPrompt ? [] : [...attachedFiles];
     if (!customPrompt) setAttachedFiles([]);
 
     let currentConv = activeConversation;
     let localConversations = [...conversations];
-
     // Create new chat if none exists or active conversation has been deleted
     if (!currentConv || !activeId) {
       const displayTitle = promptText 
         ? (promptText.length > 24 ? promptText.substring(0, 24) + "..." : promptText)
         : (filesToSend.length > 0 ? filesToSend[0].name : "New chat");
-      
       const newId = Math.random().toString(36).substring(7);
       const newConv: Conversation = {
         id: newId,
@@ -821,7 +812,6 @@ export default function Home() {
         useSearch,
         createdAt: Date.now()
       };
-      
       localConversations = [newConv, ...localConversations];
       currentConv = newConv;
       setActiveId(newId);
@@ -833,7 +823,6 @@ export default function Home() {
       const attachmentsText = filesToSend.map(file => 
         `<document name="${file.name}">\n${file.content}\n</document>`
       ).join("\n\n");
-      
       apiContent = promptText 
         ? `${promptText}\n\n${attachmentsText}`
         : `Please analyze the attached document:\n\n${attachmentsText}`;
@@ -855,7 +844,6 @@ export default function Home() {
       useThinking,
       useSearch
     };
-
     // Update conversation title if it was "New chat"
     if (currentConv.title === "New chat") {
       const displayTitle = promptText 
@@ -878,7 +866,6 @@ export default function Home() {
       content: "",
       timestamp: Date.now()
     };
-
     // Optimistically update conversations with empty assistant message
     const conversationsWithAssistant = nextConversations.map((c) =>
       c.id === updatedConv.id
@@ -920,7 +907,6 @@ export default function Home() {
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No reader available from response stream.");
-
       const decoder = new TextDecoder();
       let buffer = "";
       let accumulatedContent = "";
@@ -949,9 +935,7 @@ export default function Home() {
                       ? {
                           ...c,
                           messages: c.messages.map((m) =>
-                            m.id === assistantMessageId
-                              ? { ...m, content: accumulatedContent }
-                              : m
+                            m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m
                           )
                         }
                       : c
@@ -966,9 +950,7 @@ export default function Home() {
                       ? {
                           ...c,
                           messages: c.messages.map((m) =>
-                            m.id === assistantMessageId
-                              ? { ...m, sources }
-                              : m
+                            m.id === assistantMessageId ? { ...m, sources } : m
                           )
                         }
                       : c
@@ -999,7 +981,6 @@ export default function Home() {
               }
             : c
         );
-        // Storage sync happens automatically via useEffect
         return final;
       });
 
@@ -1007,7 +988,7 @@ export default function Home() {
       if (isArenaMode) {
         setArenaStreamingA(true);
         setArenaStreamingB(true);
-        
+
         streamDualResponse(
           updatedMessages,
           arenaProviderA,
@@ -1018,7 +999,7 @@ export default function Home() {
           useThinking,
           useSearch,
           activeModelId,
-          // onChunkA
+          // onChunkA (chunk) => {
           (chunk) => {
             if (chunk.text) {
               setArenaResponseA((prev) => prev + chunk.text);
@@ -1027,7 +1008,7 @@ export default function Home() {
               setArenaSourcesA(chunk.sources);
             }
           },
-          // onChunkB
+          // onChunkB (chunk) => {
           (chunk) => {
             if (chunk.text) {
               setArenaResponseB((prev) => prev + chunk.text);
@@ -1052,7 +1033,6 @@ export default function Home() {
           () => setArenaStreamingB(false)
         );
       }
-
     } catch (err: any) {
       console.error("Failed to generate stream response:", err);
       // Append error message to assistant chat content
@@ -1065,17 +1045,16 @@ export default function Home() {
                   m.id === assistantMessageId
                     ? {
                         ...m,
-                        content: `Error: ${err.message || "Something went wrong while connecting to the Gemini server. Ensure your GEMINI_API_KEY is configured in the Settings > Secrets menu."}`
+                        content: `Error: ${err.message || "Something went wrong while connecting to the AI server. Ensure your API keys are configured in the Settings > Secrets menu."}`
                       }
                     : m
                 )
               }
             : c
         );
-        // Storage sync happens automatically via useEffect
         return final;
       });
-      
+
       // Restore draft to input textarea to prevent total system wipe on failures
       if (!customPrompt) {
         setInput(promptText);
@@ -1096,7 +1075,6 @@ export default function Home() {
 
   return (
     <div id="app-root" className="flex h-screen w-screen overflow-hidden bg-[#070709] text-neutral-200 font-sans">
-      
       {/* 1. Collapsible Sidebar */}
       <AnimatePresence initial={false}>
         {isSidebarOpen && (
@@ -1127,7 +1105,6 @@ export default function Home() {
                   <Plus size={13} strokeWidth={2.5} />
                 </button>
               </div>
-              
               <button
                 onClick={() => setIsSidebarOpen(false)}
                 className="p-1.5 hover:bg-white/[0.04] rounded-lg transition-all text-neutral-500 hover:text-neutral-200"
@@ -1136,7 +1113,7 @@ export default function Home() {
                 <ChevronLeft size={15} />
               </button>
             </div>
-
+            
             {/* Past Chats Scroll Container */}
             <div className="flex-1 overflow-y-auto px-2 pt-4 space-y-1 scrollbar-thin scrollbar-thumb-white/[0.02]">
               <div className="flex items-center justify-between px-3 mb-2.5 mt-2">
@@ -1156,25 +1133,20 @@ export default function Home() {
                     title="Import Backup (.json)"
                   >
                     <Upload size={11} />
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={handleImportChats}
-                      className="hidden"
-                    />
+                    <input type="file" accept=".json" onChange={handleImportChats} className="hidden" />
                   </label>
                 </div>
               </div>
               
               {conversations.length === 0 ? (
-                <div className="px-3 py-8 text-xs text-neutral-600 italic text-center font-medium">
+                <div className="p-3 text-center text-xs text-neutral-600 select-none italic">
                   No active threads
                 </div>
               ) : (
                 conversations.map((conv) => {
-                  const isActive = conv.id === activeId;
+                  const isChatActive = conv.id === activeId;
                   const isEditing = conv.id === editingId;
-
+                  
                   return (
                     <div
                       key={conv.id}
@@ -1182,52 +1154,47 @@ export default function Home() {
                         setActiveId(conv.id);
                         if (isMobile) setIsSidebarOpen(false);
                       }}
-                      className={`group relative h-10 px-3.5 mx-1 rounded-xl flex items-center gap-3 cursor-pointer text-xs transition-all ${
-                        isActive
-                          ? "bg-white/[0.04] border border-white/[0.03] text-white shadow-md shadow-black/20"
-                          : "text-neutral-400 hover:bg-white/[0.015] hover:text-neutral-200 border border-transparent"
+                      className={`group/item relative flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all duration-200 cursor-pointer ${
+                        isChatActive
+                          ? "bg-white/[0.04] text-neutral-100 font-medium shadow-inner"
+                          : "text-neutral-400 hover:bg-white/[0.015] hover:text-neutral-200"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-md bg-gradient-to-b from-indigo-500 to-purple-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse" />
-                      )}
-
-                      <MessageSquare size={13.5} className={`flex-shrink-0 transition-colors ${isActive ? "text-indigo-400" : "text-neutral-500 group-hover:text-neutral-400"}`} />
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                        <MessageSquare size={14} className={isChatActive ? "text-neutral-400" : "text-neutral-600"} />
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onBlur={() => handleRenameSave(conv.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameSave(conv.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-neutral-900 border border-white/[0.08] text-xs px-2 py-0.5 rounded text-white focus:outline-none focus:border-white/[0.2] w-full"
+                          />
+                        ) : (
+                          <span className="truncate text-xs leading-none">
+                            {conv.title}
+                          </span>
+                        )}
+                      </div>
                       
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleRenameSave(conv.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          autoFocus
-                          className="flex-1 bg-neutral-900/80 border border-white/[0.08] text-white text-xs px-1.5 py-0.5 rounded outline-none font-medium"
-                        />
-                      ) : (
-                        <span className="flex-1 truncate font-medium leading-none pr-10">
-                          {conv.title}
-                        </span>
-                      )}
-
-                      {/* Hover action buttons */}
                       {!isEditing && (
-                        <div className={`absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 bg-gradient-to-l pl-4 h-full transition-all duration-150 ${
-                          isActive ? "from-[#111113] to-transparent" : "from-[#0a0a0c] to-transparent"
-                        }`}>
+                        <div className="opacity-0 group-hover/item:opacity-100 flex items-center gap-1 transition-opacity duration-150 absolute right-2 bg-gradient-to-l from-[#08080a] pl-4 h-full top-0 rounded-r-xl">
                           <button
                             onClick={(e) => startRename(conv.id, conv.title, e)}
-                            className="p-1 hover:bg-white/[0.05] rounded text-neutral-400 hover:text-white transition-colors"
+                            className="p-1 hover:text-white text-neutral-500 transition-colors"
                             title="Rename"
                           >
                             <Edit2 size={11} />
                           </button>
                           <button
                             onClick={(e) => deleteChat(conv.id, e)}
-                            className="p-1 hover:bg-white/[0.05] rounded text-neutral-400 hover:text-rose-400 transition-colors"
+                            className="p-1 hover:text-rose-400 text-neutral-500 transition-colors"
                             title="Delete"
                           >
                             <Trash2 size={11} />
@@ -1239,1094 +1206,485 @@ export default function Home() {
                 })
               )}
             </div>
-
-            {/* Sidebar Bottom Footer Info */}
-            <div className="p-3 border-t border-white/[0.02] bg-[#08080a] flex flex-col gap-2">
-              {!clientApiKey ? (
-                <div className="flex items-center justify-between px-3 py-2 border border-red-900/50 bg-red-950/15 text-red-400 text-[11px] font-medium rounded-lg select-none">
-                  <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    Sandbox Connection
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-red-400/80">1 Issue</span>
+            
+            {/* Sidebar Secrets Config Footer Button */}
+            <div className="p-3 border-t border-white/[0.02] bg-[#050506]/40 flex flex-col gap-1">
+              <button
+                onClick={() => setIsKeyModalOpen(true)}
+                className="w-full py-2 px-3 rounded-xl border border-white/[0.03] hover:border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] text-xs text-neutral-400 hover:text-neutral-200 transition-all duration-200 flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2">
+                  <Key size={13} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                  <span>Configure API Secrets</span>
                 </div>
-              ) : (
-                <div className="flex items-center justify-between px-3 py-2 border border-emerald-900/40 bg-emerald-950/10 text-emerald-400 text-[11px] font-medium rounded-lg select-none">
-                  <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
-                    Production Active
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Verified</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between p-2 rounded-xl border border-white/[0.03] bg-white/[0.01]">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center font-bold text-white text-xs shadow-[0_0_10px_rgba(139,92,246,0.2)] flex-shrink-0 select-none">
-                    G
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-neutral-200 truncate">Private Session</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
-                      <span className="text-[9px] text-neutral-500 font-semibold tracking-wider uppercase">Secure Link</span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsKeyModalOpen(true)}
-                  className="p-2 hover:bg-white/[0.05] text-neutral-400 hover:text-white rounded-lg transition-colors border border-white/[0.03] bg-white/[0.01]"
-                  title="Configure Gemini API Key"
-                >
-                  <Settings size={14} />
-                </button>
-              </div>
+                <Settings size={12} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 2. Main Chat Workspace */}
-      <div id="main-workspace" className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#070709] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900/10 via-zinc-950/20 to-[#070709]">
-        
-        {/* Advanced Ambient Spotlight Gradients (Neon Nebula Glows) */}
-        <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-600/5 rounded-full blur-[140px] pointer-events-none select-none z-0" />
-        <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[120px] pointer-events-none select-none z-0" />
-        <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-pink-600/3 rounded-full blur-[100px] pointer-events-none select-none z-0" />
-        
-        {/* Floating Sidebar Toggle when hidden */}
-        {!isSidebarOpen && (
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-4 left-4 p-2 bg-[#0d0d11]/80 hover:bg-[#161620] border border-white/[0.04] rounded-xl text-neutral-400 hover:text-white z-20 shadow-xl backdrop-blur-md transition-all duration-200 active:scale-95"
-            title="Expand sidebar"
-          >
-            <Menu size={16} />
-          </button>
-        )}
+      {/* Main Workspace Frame */}
+      <div className="flex-1 h-full flex flex-col relative min-w-0 overflow-hidden">
+        {/* Workspace Sub-Header */}
+        <ArenaHeader 
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          isArenaMode={isArenaMode}
+          setIsArenaMode={setIsArenaMode}
+          activeProvider={activeProvider}
+          setActiveProvider={setActiveProvider}
+          activeModelId={activeModelId}
+          setActiveModelId={setActiveModelId}
+          isModelDropdownOpen={isModelDropdownOpen}
+          setIsModelDropdownOpen={setIsModelDropdownOpen}
+          useThinking={useThinking}
+          toggleThinkingMode={toggleThinkingMode}
+          useSearch={useSearch}
+          setUseSearch={setUseSearch}
+          getActiveModelName={getActiveModelName}
+          arenaProviderA={arenaProviderA}
+          setArenaProviderA={setArenaProviderA}
+          arenaProviderB={arenaProviderB}
+          setArenaProviderB={setArenaProviderB}
+        />
 
-        {/* Workspace Top Header */}
-        <header className="h-16 px-6 flex items-center justify-between border-b border-white/[0.04] bg-[#08080a]/80 backdrop-blur-2xl z-20 select-none">
-          <div className="flex items-center gap-3">
-            {/* Spacer for toggle if sidebar is closed */}
-            {!isSidebarOpen && <div className="w-10 h-10" />}
-            
-            {/* Model Display Selector */}
-            <div className="relative">
-              {(() => {
-                const hasKey = 
-                  activeProvider === 'google' ? clientApiKey : 
-                  activeProvider === 'anthropic' ? clientAnthropicKey : 
-                  clientOpenaiKey;
-                
-                // Static classes based on provider and key status
-                const getBaseClasses = () => {
-                  const base = 'flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[11px] font-semibold tracking-wide cursor-pointer transition-all duration-200 active:scale-95';
-                  
-                  if (!hasKey) {
-                    return `${base} bg-red-500/5 hover:bg-red-500/10 border-red-500/20 text-red-400 hover:text-red-300`;
-                  }
-                  
-                  if (activeProvider === 'google') {
-                    return `${base} bg-indigo-500/5 hover:bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:text-indigo-200`;
-                  } else if (activeProvider === 'anthropic') {
-                    return `${base} bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/20 text-amber-300 hover:text-amber-200`;
-                  } else {
-                    return `${base} bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:text-emerald-200`;
-                  }
-                };
-
-                const getStatusDotClasses = () => {
-                  if (!hasKey) return 'bg-red-500';
-                  if (activeProvider === 'google') return 'bg-indigo-400';
-                  if (activeProvider === 'anthropic') return 'bg-amber-400';
-                  return 'bg-emerald-400';
-                };
-                
-                return (
-                  <div 
-                    onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                    className={getBaseClasses()}
+        {/* Central Interactivity Board */}
+        <div className="flex-1 overflow-hidden relative">
+          {isArenaMode ? (
+            <ArenaPanes 
+              arenaResponseA={arenaResponseA}
+              arenaResponseB={arenaResponseB}
+              arenaStreamingA={arenaStreamingA}
+              arenaStreamingB={arenaStreamingB}
+              arenaSourcesA={arenaSourcesA}
+              arenaSourcesB={arenaSourcesB}
+              arenaProviderA={arenaProviderA}
+              arenaProviderB={arenaProviderB}
+              CodeBlock={CodeBlock}
+              ReactMarkdown={ReactMarkdown}
+            />
+          ) : (
+            <div className="h-full overflow-y-auto px-4 md:px-0 scrollbar-thin scrollbar-thumb-white/[0.02]">
+              {!activeConversation || activeConversation.messages.length === 0 ? (
+                /* Empty Workspace Welcomer Panel */
+                <div className="max-w-2xl mx-auto pt-20 pb-32 flex flex-col items-center justify-center h-full text-center px-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    className="flex flex-col items-center"
                   >
-                    <GeminiSpark className="w-3.5 h-3.5" active={isStreaming} />
-                    <span>{getActiveModelName()}</span>
-                    <div className={`w-1.5 h-1.5 rounded-full ${getStatusDotClasses()}`} />
-                    <ChevronDown size={11} className="text-zinc-500 ml-0.5" />
-                  </div>
-                );
-              })()}
-              
-
-              {isModelDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setIsModelDropdownOpen(false)} />
-                  <div className="absolute left-0 mt-2 w-80 rounded-2xl border border-white/[0.04] bg-[#0c0c0e]/95 backdrop-blur-xl p-3 shadow-2xl z-40 select-none animate-scale-up">
-                    {/* Header */}
-                    <div className="px-2 py-2 mb-2">
-                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">AI Models</h3>
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-white/[0.04] to-transparent border border-white/[0.05] shadow-xl flex items-center justify-center mb-6 relative group">
+                      <div className="absolute inset-0 bg-white/[0.01] blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
+                      <GeminiSpark className="w-7 h-7" active={isStreaming} />
                     </div>
+                    
+                    <h1 className="text-2xl font-semibold tracking-tight text-neutral-100 mb-2">
+                      Frontier Model Arena Engine
+                    </h1>
+                    <p className="text-sm text-neutral-500 max-w-md mb-10 leading-relaxed font-normal">
+                      A contextual prototyping sandbox supporting direct cross-stack bridges, multi-turn streams, and multi-provider model testing.
+                    </p>
+                  </motion.div>
 
-                    {/* Providers Section */}
-                    <div className="space-y-2 mb-3 pb-3 border-b border-white/[0.02]">
-                      {(['google', 'anthropic', 'openai', 'openrouter'] as const).map((provider) => {
-                        const config = PROVIDER_CONFIG[provider];
-                        const hasKey = 
-                          provider === 'google' ? clientApiKey : 
-                          provider === 'anthropic' ? clientAnthropicKey : 
-                          provider === 'openai' ? clientOpenaiKey :
-                          clientOpenrouterKey;
-                        const isActive = activeProvider === provider;
-                        
-                        // Get static classes based on provider
-                        const getProviderClasses = () => {
-                          const base = 'px-3 py-2.5 rounded-xl border transition-all cursor-pointer';
-                          const disabledClass = !hasKey ? 'opacity-50 cursor-not-allowed' : '';
-                          
-                          if (provider === 'google') {
-                            return `${base} ${isActive ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
-                          } else if (provider === 'anthropic') {
-                            return `${base} ${isActive ? 'bg-amber-500/10 border-amber-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
-                          } else if (provider === 'openai') {
-                            return `${base} ${isActive ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
-                          } else {
-                            return `${base} ${isActive ? 'bg-purple-500/10 border-purple-500/30' : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'} ${disabledClass}`;
-                          }
-                        };
-
-                        const getDotAndTextClasses = () => {
-                          if (provider === 'google') {
-                            return {
-                              dot: 'bg-indigo-500',
-                              text: isActive ? 'text-indigo-300' : 'text-zinc-300'
-                            };
-                          } else if (provider === 'anthropic') {
-                            return {
-                              dot: 'bg-amber-500',
-                              text: isActive ? 'text-amber-300' : 'text-zinc-300'
-                            };
-                          } else if (provider === 'openai') {
-                            return {
-                              dot: 'bg-emerald-500',
-                              text: isActive ? 'text-emerald-300' : 'text-zinc-300'
-                            };
-                          } else {
-                            return {
-                              dot: 'bg-purple-500',
-                              text: isActive ? 'text-purple-300' : 'text-zinc-300'
-                            };
-                          }
-                        };
-                        
-                        const classes = getDotAndTextClasses();
-                        
-                        return (
-                          <div 
-                            key={provider}
-                            onClick={() => {
-                              if (hasKey) {
-                                setActiveProvider(provider);
-                                const firstModel = config.models[0];
-                                setActiveModelId(firstModel.id);
-                                setUseSearch(false);
-                                if (firstModel.supportsThinking) {
-                                  setUseThinking(true);
-                                } else {
-                                  setUseThinking(false);
-                                }
-                              }
-                            }}
-                            className={getProviderClasses()}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className={`w-1.5 h-1.5 rounded-full ${classes.dot}`} />
-                                  <span className={`text-xs font-semibold ${classes.text}`}>
-                                    {config.name}
-                                  </span>
-                                  {hasKey ? (
-                                    <div className="flex items-center gap-1 ml-auto">
-                                      <div className="w-1 h-1 rounded-full bg-green-500" />
-                                      <span className="text-[9px] text-green-600 font-mono">KEY</span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1 ml-auto">
-                                      <div className="w-1 h-1 rounded-full bg-red-500" />
-                                      <span className="text-[9px] text-red-600 font-mono">SETUP</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <p className="text-[10px] text-zinc-500">{config.description}</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Models Section for Active Provider */}
-                    <div className="space-y-1">
-                      <div className="px-2 py-1 text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
-                        Models
-                      </div>
-                      {PROVIDER_CONFIG[activeProvider].models.map((model) => {
-                        const isSelected = 
-                          activeProvider === model.provider && 
-                          activeModelId === model.id &&
-                          (model.supportsThinking ? useThinking : !useThinking);
-
-                        const getModelClasses = () => {
-                          const base = 'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all';
-                          
-                          if (activeProvider === 'google') {
-                            return `${base} ${isSelected ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/20' : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/[0.02] border border-transparent'}`;
-                          } else if (activeProvider === 'anthropic') {
-                            return `${base} ${isSelected ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20' : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/[0.02] border border-transparent'}`;
-                          } else {
-                            return `${base} ${isSelected ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/[0.02] border border-transparent'}`;
-                          }
-                        };
-
-                        const getDotClasses = () => {
-                          if (activeProvider === 'google') {
-                            return isSelected ? 'bg-indigo-400' : 'bg-transparent';
-                          } else if (activeProvider === 'anthropic') {
-                            return isSelected ? 'bg-amber-400' : 'bg-transparent';
-                          } else {
-                            return isSelected ? 'bg-emerald-400' : 'bg-transparent';
-                          }
-                        };
-
-                        return (
-                          <button
-                            key={model.id}
-                            onClick={() => {
-                              setActiveModelId(model.id);
-                              setUseSearch(false);
-                              if (model.supportsThinking) {
-                                setUseThinking(true);
-                              } else {
-                                setUseThinking(false);
-                              }
-                              setIsModelDropdownOpen(false);
-                            }}
-                            className={getModelClasses()}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className={`w-1.5 h-1.5 rounded-full ${getDotClasses()}`} />
-                              <div className="text-left">
-                                <div>{model.name}</div>
-                                {model.capabilities && (
-                                  <div className="text-[9px] text-zinc-600">
-                                    {model.capabilities.join(' • ')}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`text-[9px] font-mono opacity-60 ${isSelected ? 'opacity-100' : ''}`}>
-                              {Math.round(model.contextWindow / 1000)}K
-                            </span>
-                          </button>
-                        );
-                      })}
-
-                      {/* Thinking Mode Toggle */}
-                      <div className="mt-3 pt-2 border-t border-white/[0.02]">
-                        <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.02] cursor-pointer transition-all">
-                          <input
-                            type="checkbox"
-                            checked={useThinking}
-                            onChange={(e) => {
-                              toggleThinkingMode();
-                            }}
-                            className="w-3.5 h-3.5 rounded border-zinc-600 text-indigo-500 focus:ring-0 cursor-pointer"
-                          />
-                          <span className="text-xs text-zinc-300 font-medium">Extended Thinking</span>
-                          <span className="text-[9px] text-zinc-600 ml-auto">Slow but Deep</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Grounding & Thinking State indicator lamps */}
-            <div className="hidden sm:flex items-center gap-2">
-              <button
-                onClick={() => {
-                  toggleThinkingMode();
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
-                  useThinking
-                    ? "bg-purple-950/20 border-purple-500/20 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.08)]"
-                    : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                }`}
-                title="Toggle Deep Thinking Mode"
-              >
-                <Sparkles size={11} className={useThinking ? "text-purple-400" : ""} />
-                <span>Thinking</span>
-              </button>
-              
-              {activeProvider !== "google" && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/[0.03] bg-white/[0.015] text-zinc-500">
-                  <span>BYOK Active</span>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setIsArenaMode(!isArenaMode)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
-                isArenaMode
-                  ? "bg-indigo-950/30 border-indigo-500/30 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.1)]"
-                  : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-              }`}
-              title="Toggle Arena Mode (Compare Models)"
-            >
-              <span>Arena</span>
-            </button>
-
-            <div className="w-7 h-7 rounded-full bg-zinc-900 border border-white/[0.08] flex items-center justify-center font-bold text-zinc-400 text-[10px] select-none shadow-sm">
-              P
-            </div>
-          </div>
-        </header>
-
-        {/* Arena Mode Header */}
-        {isArenaMode && (
-          <ArenaHeader
-            isOpen={isArenaMode}
-            onToggle={setIsArenaMode}
-            providerA={arenaProviderA}
-            providerB={arenaProviderB}
-            onProviderAChange={setArenaProviderA}
-            onProviderBChange={setArenaProviderB}
-            streamingA={arenaStreamingA}
-            streamingB={arenaStreamingB}
-          />
-        )}
-
-        {/* Arena Panes */}
-        {isArenaMode && (arenaResponseA || arenaResponseB || arenaStreamingA || arenaStreamingB) && (
-          <ArenaPanes
-            providerA={arenaProviderA}
-            providerB={arenaProviderB}
-            responseA={arenaResponseA}
-            responseB={arenaResponseB}
-            streamingA={arenaStreamingA}
-            streamingB={arenaStreamingB}
-            sourcesA={arenaSourcesA}
-            sourcesB={arenaSourcesB}
-          />
-        )}
-
-        {/* Chat Scrolling Area - Only this scrolls */}
-        <main className="flex-1 overflow-y-auto min-h-0 pb-24 py-6 z-10 scrollbar-thin scrollbar-thumb-white/[0.02]">
-          <div className="max-w-2xl mx-auto w-full flex flex-col px-4 lg:px-8">
-            
-            {/* If no active conversation or no messages, show Bento landing welcome page */}
-            {!activeConversation || activeConversation.messages.length === 0 ? (
-              <div className="my-auto flex flex-col items-start pt-10 pb-24 w-full animate-fade-in z-10">
-                
-                 {/* Greeting */}
-                <div className="mb-10 select-none">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-500 block mb-2">
-                    Initialize Session
-                  </span>
-                  <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight leading-tight bg-gradient-to-b from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent">
-                    Workspace Console
-                  </h1>
-                </div>
-
-                {/* Suggested Prompts Bento Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 w-full mt-2">
-                  {suggestedPrompts.map((p, idx) => (
-                    <motion.div
-                      key={idx}
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.99 }}
-                      onClick={() => handleSendMessage(p.category + " " + p.text)}
-                      className="bg-transparent border-b border-white/[0.04] hover:border-zinc-700/50 py-5 cursor-pointer flex flex-col justify-between min-h-[120px] transition-all duration-300 group rounded-none"
-                    >
-                      <p className="text-sm font-medium text-zinc-300 leading-relaxed tracking-tight group-hover:text-white transition-colors duration-300">
-                        <span className="text-zinc-500 group-hover:text-zinc-400 font-bold block text-[10px] uppercase tracking-widest mb-2 transition-colors duration-300">
-                          {p.category}
-                        </span>
-                        {p.text}
-                      </p>
-                      <div className="flex justify-end mt-2">
-                        <div className="text-zinc-500 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition-all duration-300">
-                          {p.icon}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-
-                {/* Extra Guidance */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10 mx-auto w-full">
-                  <button
-                    onClick={() => setIsKeyModalOpen(true)}
-                    className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full border transition-all duration-300 ${
-                      clientApiKey 
-                        ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.05)]" 
-                        : "bg-white/[0.01] border-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.03]"
-                    }`}
-                  >
-                    <Key size={10} />
-                    <span>{clientApiKey ? "Key configured" : "Configure Key"}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Message Thread List */
-              <div className="space-y-8 pb-32">
-                {activeConversation.messages.map((m) => {
-                  const isUser = m.role === "user";
-
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex gap-4 sm:gap-6 items-start ${
-                        isUser ? "justify-end" : "justify-start"
-                      } animate-fade-in`}
-                    >
-                      {/* Left icon wrapper for AI messages */}
-                      {!isUser && (
-                        <div className="w-7 h-7 rounded-lg bg-[#08080a] border border-white/[0.04] flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <GeminiSpark className="w-3.5 h-3.5 text-zinc-400" mono={true} active={isStreaming} />
-                        </div>
-                      )}
-
-                      <div
-                        className={`flex flex-col max-w-[85%] ${
-                          isUser ? "items-end" : "items-start"
-                        }`}
+                  {/* Starter Suggestions Matrix */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-xl">
+                    {suggestedPrompts.map((prompt, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 + 0.1, duration: 0.35 }}
+                        onClick={() => handleSendMessage(prompt.text)}
+                        className="group p-3.5 rounded-xl border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.07] text-left transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden"
                       >
-                        {/* Message content box */}
-                        <div
-                          className={`text-[14px] leading-relaxed ${
-                            isUser
-                              ? "text-zinc-100 font-medium tracking-tight text-right leading-relaxed max-w-xl"
-                              : m.content && m.content.startsWith("Error:")
-                              ? "w-full"
-                              : "text-zinc-300"
-                          }`}
-                        >
-                          {isUser ? (
-                            <div className="space-y-3">
-                              {getPromptTextOnly(m.content) ? (
-                                <p className="whitespace-pre-wrap">{getPromptTextOnly(m.content)}</p>
-                              ) : (
-                                <p className="text-xs text-neutral-500 italic font-medium">Sent attached document(s)</p>
-                              )}
-                              {m.files && m.files.length > 0 && (
-                                <div className="flex flex-col gap-2 mt-3 items-end">
-                                  {m.files.map((file, idx) => (
-                                    <div
-                                      key={file.id || idx}
-                                      className="flex items-center gap-3 bg-[#0a0a0d] border border-white/[0.04] rounded-xl p-2.5 w-64 transition-all hover:border-white/[0.08]"
-                                    >
-                                      <div className="w-8 h-8 rounded-lg bg-zinc-900 text-zinc-400 flex items-center justify-center flex-shrink-0 border border-white/[0.04]">
-                                        <FileText size={14} />
-                                      </div>
-                                      <div className="min-w-0 flex-1 text-left">
-                                        <p className="text-xs font-bold text-zinc-200 truncate" title={file.name}>
-                                          {file.name}
-                                        </p>
-                                        <p className="text-[9px] text-zinc-500 font-mono">
-                                          {formatFileSize(file.size)}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  ))}
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider group-hover:text-neutral-400 transition-colors">
+                            {prompt.category}
+                          </span>
+                          <div className="p-1 rounded-md bg-white/[0.02] border border-white/[0.03] group-hover:border-white/[0.08] transition-all">
+                            {prompt.icon}
+                          </div>
+                        </div>
+                        <p className="text-xs text-neutral-400 group-hover:text-neutral-200 transition-colors duration-300 font-normal line-clamp-2 pr-2">
+                          "{prompt.text}"
+                        </p>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* Ongoing Message Chain Streamboard */
+                <div className="max-w-3xl mx-auto pt-6 pb-36 space-y-8 px-4">
+                  {activeConversation.messages.map((msg) => {
+                    const isUser = msg.role === "user";
+                    const isGoogle = activeProvider === "google";
+                    
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex gap-4.5 ${isUser ? "justify-end" : "justify-start"}`}
+                      >
+                        {!isUser && (
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-white/[0.05] to-transparent border border-white/[0.04] flex items-center justify-center flex-shrink-0 shadow-md">
+                            <GeminiSpark className="w-4 h-4" active={false} mono={!isGoogle} />
+                          </div>
+                        )}
+                        
+                        <div className={`max-w-[85%] flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}>
+                          {/* Attached files container in chat item bubble */}
+                          {msg.files && msg.files.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-1.5 justify-end w-full">
+                              {msg.files.map((file) => (
+                                <div 
+                                  key={file.id} 
+                                  className="flex items-center gap-2 bg-[#0d0d10]/95 border border-white/[0.05] px-3 py-1.5 rounded-xl text-xs text-neutral-300 shadow-sm"
+                                >
+                                  <FileText size={13} className="text-zinc-500" />
+                                  <span className="max-w-[140px] truncate font-medium">{file.name}</span>
+                                  <span className="text-[10px] text-zinc-600 font-mono">({formatFileSize(file.size)})</span>
                                 </div>
-                              )}
+                              ))}
                             </div>
-                          ) : m.content && m.content.startsWith("Error:") ? (
-                            /* Premium structural console-style banner for error states */
-                            <div className="bg-zinc-900/40 border border-red-500/20 backdrop-blur-md rounded-xl p-4 text-xs text-zinc-400 max-w-2xl font-mono leading-relaxed tracking-wide shadow-inner select-none animate-fade-in my-2">
-                              <div className="mb-2">
-                                <span className="text-red-400 font-bold uppercase tracking-wider">SYSTEM ALERT</span>
+                          )}
+
+                          <div className={`rounded-2xl text-[14.5px] leading-relaxed shadow-sm px-4.5 py-3 ${
+                            isUser
+                              ? "bg-neutral-100 text-neutral-900 font-normal"
+                              : "text-neutral-200 w-full"
+                          }`}>
+                            {isUser ? (
+                              <p className="whitespace-pre-wrap select-text">{getPromptTextOnly(msg.content)}</p>
+                            ) : msg.content === "" ? (
+                              <div className="flex items-center gap-2 py-2 select-none">
+                                <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-bounce duration-600" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-bounce duration-600 delay-150" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-bounce duration-600 delay-300" />
                               </div>
-                              <div className="max-h-60 overflow-y-auto overflow-x-hidden rounded-lg p-3 bg-red-950/20 border border-red-500/10 text-red-300 break-all whitespace-pre-wrap text-left">
-                                {m.content.substring(6).trim()}
-                              </div>
-                            </div>
-                          ) : (
-                            /* Render Markdown for Assistant */
-                            <div className={`prose prose-invert prose-sm max-w-none space-y-3 ${
-                              isStreaming && activeConversation && activeConversation.messages[activeConversation.messages.length - 1]?.id === m.id
-                                ? "streaming-active-container"
-                                : ""
-                            }`}>
-                              {m.content ? (
+                            ) : (
+                              <div className="prose prose-invert prose-neutral max-w-none prose-sm selection:bg-white/[0.1] prose-p:leading-relaxed prose-pre:p-0 prose-pre:bg-transparent prose-pre:border-0 select-text">
                                 <ReactMarkdown
                                   components={{
-                                    p: ({ children }) => <p className="mb-4 leading-relaxed text-neutral-300 font-medium tracking-tight">{children}</p>,
-                                    ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-1.5 text-neutral-300 font-medium">{children}</ol>,
-                                    ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-1.5 text-neutral-300 font-medium">{children}</ul>,
-                                    li: ({ children }) => <li className="text-neutral-300 mb-1 leading-relaxed">{children}</li>,
-                                    h1: ({ children }) => <h1 className="text-lg font-bold mt-6 mb-2.5 text-white tracking-tight">{children}</h1>,
-                                    h2: ({ children }) => <h2 className="text-md font-bold mt-5 mb-2 text-white tracking-tight">{children}</h2>,
-                                    h3: ({ children }) => <h3 className="text-sm font-semibold mt-4 mb-1 text-white tracking-tight">{children}</h3>,
-                                    p: ({children}) => <p className="mb-3 last:mb-0 leading-relaxed text-[14px] text-zinc-100">{children}</p>,
-                                    pre: ({children}) => <div className="max-w-full my-4 overflow-x-auto">{children}</div>,
-                                    a: ({ href, children }) => (
-                                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-350 hover:underline inline-flex items-center gap-0.5 font-bold transition-colors">
-                                        {children} <ExternalLink size={9} />
-                                      </a>
-                                    ),
-                                    code: ({ className, children, ...props }: any) => {
-                                      const match = /language-(\w+)/.exec(className || '');
-                                      const codeContent = String(children).replace(/\n$/, '');
-                                      const isBlock = match || codeContent.includes('\n');
-                                      if (isBlock) {
-                                        return <CodeBlock language={match ? match[1] : 'code'} value={codeContent} />;
-                                      }
-                                      return (
-                                        <code className="bg-[#0f0f11] text-indigo-300 px-1.5 py-0.5 rounded text-[12px] font-mono border border-white/[0.04]" {...props}>
+                                    code({ node, className, children, ...props }) {
+                                      const match = /language-(\w+)/.exec(className || "");
+                                      const codeVal = String(children).replace(/\n$/, "");
+                                      return match ? (
+                                        <CodeBlock language={match[1]} value={codeVal} />
+                                      ) : (
+                                        <code className={`${className} bg-white/[0.05] px-1.5 py-0.5 rounded-md font-mono text-xs text-zinc-300 border border-white/[0.02]`} {...props}>
                                           {children}
                                         </code>
                                       );
                                     }
                                   }}
                                 >
-                                  {m.content}
+                                  {msg.content}
                                 </ReactMarkdown>
-                              ) : (
-                                /* High-status weightless skeleton loader for the absolute beginning of stream */
-                                <div className="space-y-3 py-1 select-none animate-pulse max-w-lg">
-                                  <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/80 animate-ping"></div>
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-400 bg-indigo-950/30 px-2.5 py-1 rounded-md border border-indigo-800/20">
-                                      Synthesizing
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Found Grounded Search Sources list banner */}
+                          {!isUser && msg.sources && msg.sources.length > 0 && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mt-2.5 w-full rounded-xl border border-white/[0.03] bg-white/[0.01] p-3 shadow-inner"
+                            >
+                              <div className="flex items-center gap-1.5 mb-2 select-none">
+                                <Globe size={11} className="text-emerald-500 animate-pulse" />
+                                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+                                  Grounding Citations ({msg.sources.length})
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {msg.sources.map((src, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={src.uri}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-[11px] bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.03] hover:border-white/[0.08] text-neutral-400 hover:text-neutral-200 py-1 px-2.5 rounded-lg transition-all duration-200"
+                                  >
+                                    <span className="font-mono text-[9px] text-zinc-600 bg-white/[0.02] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white/[0.04]">
+                                      {idx + 1}
                                     </span>
-                                  </div>
-                                  <div className="h-3 bg-zinc-800/40 border border-white/[0.02] rounded-lg w-11/12"></div>
-                                  <div className="h-3 bg-zinc-800/40 border border-white/[0.02] rounded-lg w-4/5"></div>
-                                  <div className="h-3 bg-zinc-800/40 border border-white/[0.02] rounded-lg w-3/5"></div>
-                                </div>
-                              )}
-                            </div>
+                                    <span className="truncate max-w-[160px] font-medium">{src.title}</span>
+                                    <ExternalLink size={10} className="opacity-40" />
+                                  </a>
+                                ))}
+                              </div>
+                            </motion.div>
                           )}
                         </div>
-
-                        {/* Grounding sources citation chips */}
-                        {!isUser && m.sources && m.sources.length > 0 && (
-                          <div className="mt-4 border-t border-white/[0.02] pt-3 w-full">
-                            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest block mb-2.5 flex items-center gap-1.5">
-                              <Globe size={11} className="text-indigo-400" /> Grounding Sources
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                              {m.sources.map((s, idx) => (
-                                <a
-                                  key={idx}
-                                  href={s.uri}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 bg-[#0a0a0c]/80 hover:bg-[#121215]/90 border border-white/[0.03] hover:border-white/[0.08] px-3 py-1.5 rounded-xl text-xs font-medium text-neutral-300 transition-all duration-200"
-                                >
-                                  <Globe size={10} className="text-neutral-500" />
-                                  <span className="max-w-[150px] truncate">{s.title || s.uri}</span>
-                                  <ExternalLink size={8} className="text-neutral-500" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
-
-                      {/* Right icon wrapper for user messages */}
-                      {isUser && (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-600 flex items-center justify-center font-bold text-white text-[11px] shadow-lg shadow-purple-500/10 flex-shrink-0 select-none">
-                          G
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
-        </main>
-
-        {/* Bottom Input Bar - Fixed at bottom, doesn't scroll */}
-        <div id="input-container" className="flex-shrink-0 bg-gradient-to-t from-[#070709] via-[#070709]/95 to-transparent pt-12 pb-6 z-10 border-t border-white/[0.04]">
-          <div className="max-w-3xl mx-auto w-full px-6">
-            
-            {/* Input Bar Card */}
-            <div className="bg-[#0c0c0f] border border-white/[0.04] rounded-2xl p-5 pb-4 flex flex-col gap-2 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-[0_-8px_30px_rgba(0,0,0,0.5),_0_16px_40px_rgba(0,0,0,0.7)] hover:border-white/[0.07] focus-within:border-zinc-700/40 focus-within:ring-1 focus-within:ring-white/[0.01]">
-              
-              {/* Attached files preview container */}
-              {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 px-3 pt-2 pb-1 border-b border-white/[0.03]">
-                  {attachedFiles.map((file) => (
-                    <div
-                       key={file.id}
-                       className="flex items-center gap-2 bg-black/40 border border-white/[0.02] rounded-xl px-3 py-1.5 text-xs text-neutral-300 max-w-[240px] animate-fade-in"
-                     >
-                       <FileText size={13} className="text-indigo-400 flex-shrink-0" />
-                       <div className="min-w-0 flex-1">
-                         <p className="font-semibold truncate text-[11px]" title={file.name}>
-                           {file.name}
-                         </p>
-                         <p className="text-[9px] text-neutral-500 font-mono">
-                           {formatFileSize(file.size)}
-                         </p>
-                       </div>
-                       <button
-                         type="button"
-                         onClick={() => {
-                           setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id));
-                         }}
-                         className="p-1 hover:bg-white/[0.05] text-neutral-500 hover:text-neutral-300 rounded-md transition-colors"
-                         title="Remove attachment"
-                       >
-                         <X size={11} />
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               )}
- 
-                {/* Inner Expanding Textarea */}
-               <div className="flex items-start px-2 pt-1.5">
-                 <textarea
-                   ref={textareaRef}
-                   rows={1}
-                   value={input}
-                   onChange={(e) => setInput(e.target.value)}
-                   onKeyDown={handleKeyDown}
-                   onPaste={handlePaste}
-                   placeholder={`Ask ${getActiveModelName()}...`}
-                   data-dummy={`Ask ${getActiveModelName()}...`}
-                   className="flex-1 bg-transparent border-0 resize-none outline-none text-neutral-200 text-sm py-1 placeholder-neutral-650 min-h-[24px] max-h-[200px] leading-relaxed"
-                 />
-               </div>
- 
-               {/* Action Toolbar Inside Input Bar */}
-               <div className="flex items-center justify-between px-1.5 pt-3 pb-1">
-                 <div className="flex items-center gap-1">
-                   
-                   {/* File Upload / Attachment Button */}
-                   <label
-                     className="p-2 rounded-full text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200 transition-all flex items-center justify-center cursor-pointer active:scale-95"
-                     title="Attach text or code file (.txt, .js, .ts, etc.)"
-                   >
-                     <Paperclip size={14} />
-                     <input
-                       type="file"
-                       accept=".txt,.js,.jsx,.ts,.tsx,.json,.css,.html,.md,.py,.java,.cpp,.c,.rs,.sh,.yml,.yaml"
-                       onChange={handleFileUpload}
-                       className="hidden"
-                     />
-                   </label>
- 
-                    {/* Thinking Mode Switch Button */}
-                   <button
-                     onClick={() => {
-                       toggleThinkingMode();
-                     }}
-                     className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
-                       useThinking
-                         ? "bg-purple-950/40 text-purple-300 border border-purple-800/40 shadow-[0_0_8px_rgba(168,85,247,0.1)]"
-                         : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
-                     }`}
-                     title="Thinking Mode"
-                   >
-                     <Sparkles size={14} />
-                   </button>
-                   {activeProvider === "google" && activeModelId === "gemini-3.5-flash" && (
-                     <button
-                       onClick={() => {
-                         setUseSearch(!useSearch);
-                       }}
-                       className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
-                         useSearch
-                           ? "bg-blue-950/40 text-blue-300 border border-blue-800/40 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
-                           : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
-                       }`}
-                       title="Search Grounding"
-                     >
-                       <Globe size={14} />
-                     </button>
-                   )}
-                   <button
-                     onClick={() => setIsKeyModalOpen(true)}
-                     className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
-                       (activeProvider === "google" ? clientApiKey : activeProvider === "anthropic" ? clientAnthropicKey : clientOpenaiKey)
-                         ? "text-emerald-400 hover:bg-white/[0.04] bg-emerald-500/5 border border-emerald-500/10"
-                         : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
-                     }`}
-                     title="Configure Encryption Key Vault"
-                   >
-                     <Key size={14} />
-                   </button>
-                   <button className="hidden">
-                   </button>
-
-                  {/* Feature Active Badges */}
-                  {useThinking && (
-                    <div className="hidden sm:flex items-center gap-1 pl-1">
-                      <span className="text-[9px] font-bold text-purple-400 bg-purple-950/20 border border-purple-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        Thinking Mode
-                      </span>
-                    </div>
-                  )}
-                  {useSearch && activeProvider === "google" && activeModelId === "gemini-3.5-flash" && (
-                    <div className="hidden sm:flex items-center gap-1 pl-1">
-                      <span className="text-[9px] font-bold text-blue-400 bg-blue-950/20 border border-blue-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        Search Grounding
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Draft Saved Locally Badge */}
-                  {input.trim() && activeId && (
-                    <div className="flex items-center gap-1.5 pl-2 text-zinc-500 font-mono text-[10px] tracking-wide select-none animate-fade-in">
-                      <div className="w-1 h-1 rounded-full bg-emerald-500/80 animate-pulse" />
-                      <span>Draft saved locally</span>
-                    </div>
-                  )}
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
                 </div>
-
-                {/* Send Message Button */}
-                <button
-                  onClick={() => handleSendMessage()}
-                  disabled={(!input.trim() && attachedFiles.length === 0) || isStreaming}
-                  className={`p-2.5 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
-                    (input.trim() || attachedFiles.length > 0) && !isStreaming
-                      ? "bg-white text-[#070709] hover:bg-neutral-100 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)]"
-                      : "text-neutral-600 bg-white/[0.02] cursor-not-allowed"
-                  }`}
-                  title="Send message"
-                >
-                  <Send size={14} />
-                </button>
-              </div>
+              )}
             </div>
-
-            {/* Disclaimer disclaimer text */}
-            <p className="text-[10px] text-zinc-650/30 text-center mt-3.5 select-none font-medium tracking-wide">
-              Gemini can make mistakes. Please verify critical details.
-            </p>
-          </div>
+          )}
         </div>
 
+        {/* Global Floating Action Shell & Prompt Input Bar */}
+        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#070709] via-[#070709]/95 to-transparent pt-12 pb-6 px-4 select-none z-20">
+          <div className="max-w-3xl mx-auto flex flex-col gap-2 relative">
+            
+            {/* Attached file chips row inside input bar frame */}
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-1 mb-1 max-h-[100px] overflow-y-auto">
+                {attachedFiles.map((file) => (
+                  <div 
+                    key={file.id} 
+                    className="flex items-center gap-2 bg-[#0c0c0e]/95 border border-white/[0.06] pl-3 pr-2 py-1 rounded-xl text-xs text-neutral-200 shadow-md group/chip animate-scale-up"
+                  >
+                    <FileText size={12} className="text-zinc-400" />
+                    <span className="max-w-[120px] truncate font-medium">{file.name}</span>
+                    <span className="text-[9px] text-zinc-600 font-mono">({formatFileSize(file.size)})</span>
+                    <button 
+                      onClick={() => setAttachedFiles(prev => prev.filter(f => f.id !== file.id))}
+                      className="p-0.5 rounded-md hover:bg-white/[0.06] text-neutral-500 hover:text-neutral-200 transition-all ml-1"
+                      title="Remove document attachment"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="relative rounded-2xl border border-white/[0.04] bg-[#0c0c0e]/85 backdrop-blur-xl transition-all duration-300 focus-within:border-white/[0.1] focus-within:shadow-[0_0_30px_rgba(255,255,255,0.015)] shadow-xl overflow-hidden">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder={isArenaMode ? "Input unified prompt to trigger multi-provider battle stream..." : `Message ${getActiveModelName()}...`}
+                rows={1}
+                disabled={isStreaming}
+                className="w-full bg-transparent text-neutral-200 placeholder-neutral-500 text-[14.5px] leading-relaxed pl-4.5 pr-28 pt-3.5 pb-12 focus:outline-none resize-none min-h-[52px] max-h-[200px] font-normal"
+              />
+              
+              {/* Input Action Panel Row */}
+              <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between border-t border-white/[0.01] pt-2 pointer-events-auto">
+                <div className="flex items-center gap-1.5">
+                  {/* File attach button linking to invisible input */}
+                  <label className="p-1.5 hover:bg-white/[0.04] rounded-lg transition-all text-neutral-500 hover:text-neutral-300 cursor-pointer flex items-center justify-center">
+                    <Paperclip size={14} />
+                    <input 
+                      type="file" 
+                      onChange={handleFileUpload} 
+                      className="hidden" 
+                      accept=".txt,.js,.jsx,.ts,.tsx,.json,.css,.md,.html,.py,.java,.cpp,.c,.rs,.sh,.yml,.yaml" 
+                    />
+                  </label>
+                  
+                  <span className="h-3.5 w-[1px] bg-white/[0.04] mx-0.5" />
+
+                  {/* Thinking Accelerator Switch */}
+                  <button
+                    onClick={toggleThinkingMode}
+                    className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all duration-300 border text-[11px] font-semibold tracking-wider uppercase ${
+                      useThinking
+                        ? "bg-purple-950/30 border-purple-500/30 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.05)]"
+                        : "bg-white/[0.01] border-white/[0.03] hover:border-white/[0.06] text-neutral-500 hover:text-neutral-300"
+                    }`}
+                    title="Toggle high-density analytical reasoning pipeline"
+                  >
+                    <Sparkles size={11} className={useThinking ? "text-purple-400 animate-spin-slow" : ""} />
+                    <span>Thinking</span>
+                  </button>
+
+                  {/* Search Grounding Pipeline Trigger */}
+                  <button
+                    onClick={() => setUseSearch(!useSearch)}
+                    className={`flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all duration-300 border text-[11px] font-semibold tracking-wider uppercase ${
+                      useSearch
+                        ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.05)]"
+                        : "bg-white/[0.01] border-white/[0.03] hover:border-white/[0.06] text-neutral-500 hover:text-neutral-300"
+                    }`}
+                    title="Toggle web grounding engine query attachment"
+                  >
+                    <Globe size={11} className={useSearch ? "text-emerald-400" : ""} />
+                    <span>Search</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Token length budget indicator counter visible when typing */}
+                  {input.trim().length > 0 && (
+                    <span className="text-[10px] text-neutral-600 font-mono tracking-normal select-none pr-1">
+                      {input.length} chars
+                    </span>
+                  )}
+
+                  {/* Ultimate message dispatch trigger */}
+                  <button
+                    onClick={() => handleSendMessage()}
+                    disabled={(!input.trim() && attachedFiles.length === 0) || isStreaming}
+                    className={`p-1.5 rounded-xl transition-all duration-300 flex items-center justify-center ${
+                      (input.trim() || attachedFiles.length > 0) && !isStreaming
+                        ? "bg-neutral-100 hover:bg-white text-neutral-950 shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                        : "bg-white/[0.02] text-neutral-600 border border-white/[0.01]"
+                    }`}
+                    title="Dispatch message packet"
+                  >
+                    <Send size={13} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Context status warning bar */}
+            <div className="px-2 flex items-center justify-between text-[10px] text-neutral-600 select-none font-normal tracking-wide">
+              <span className="flex items-center gap-1">
+                <Info size={10} className="opacity-60" /> 
+                Sandbox states refresh automatically upon window teardowns.
+              </span>
+              <span>Encrypted client local sandbox.</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* 3. API Key Configuration Modal */}
+      {/* 3. API Keys Encryption Manager Pop-Up Modal */}
       <AnimatePresence>
         {isKeyModalOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none"
+            className="fixed inset-0 z-50 bg-[#040405]/85 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setIsKeyModalOpen(false)}
           >
             <motion.div
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
+              initial={{ scale: 0.95, y: 10, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 10, opacity: 0 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="bg-[#0c0c0e]/95 border border-white/[0.04] rounded-3xl p-6 max-w-2xl w-full shadow-[0_24px_50px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-2xl max-h-[85vh] overflow-y-auto flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#0b0b0d] border border-white/[0.05] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             >
-              {/* Header */}
-              <div className="mb-6 flex-shrink-0">
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-white/[0.05] flex items-center justify-center text-indigo-400 flex-shrink-0">
-                    <Key size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white tracking-tight">Manage API Keys</h3>
-                    <p className="text-[11px] text-zinc-500 mt-0.5">
-                      Keys are encrypted locally in your browser and never sent to our servers
-                    </p>
-                  </div>
+              {/* Modal Banner Title Header */}
+              <div className="px-5 py-4 bg-[#101013]/60 border-b border-white/[0.02] flex items-center justify-between select-none">
+                <div className="flex items-center gap-2">
+                  <Key size={14} className="text-zinc-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-300">
+                    Encrypted API Keys Vault
+                  </h3>
                 </div>
+                <button
+                  onClick={() => setIsKeyModalOpen(false)}
+                  className="p-1 rounded-lg hover:bg-white/[0.04] text-neutral-500 hover:text-neutral-200 transition-colors"
+                >
+                  <X size={14} />
+                </button>
               </div>
 
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto min-h-0 mb-6">
+              {/* Secret forms content matrix area */}
+              <div className="p-5 space-y-4">
+                <div className="p-3 rounded-xl bg-amber-500/[0.02] border border-amber-500/10 text-neutral-400 text-[11px] leading-relaxed flex items-start gap-2.5">
+                  <ShieldAlert size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p>
+                    Keys are committed exclusively into client-side sandbox containers. They pass directly to standard completion tunnels and are completely isolated from storage exfiltration.
+                  </p>
+                </div>
 
-              {/* Provider Cards */}
-              <div className="grid grid-cols-1 gap-4 mb-6">
-                {/* Google */}
-                {(() => {
-                  const hasKey = clientApiKey.length > 0;
-                  const isModified = tempGoogleKey !== clientApiKey && tempGoogleKey.trim() !== "";
-                  
-                  const getStatusColor = () => {
-                    if (isModified) return 'indigo-600';
-                    if (hasKey) return 'indigo-500/30';
-                    return 'white/5';
-                  };
-                  
-                  const getStatusBorder = () => {
-                    if (isModified) return 'border-indigo-500/50';
-                    if (hasKey) return 'border-indigo-500/20';
-                    return 'border-white/10';
-                  };
-                  
-                  return (
-                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-indigo-400" />
-                          <div>
-                            <h4 className="text-sm font-semibold text-indigo-300">Google Gemini</h4>
-                            <p className="text-[10px] text-zinc-500">Fast & versatile models</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                          <a
-                            href="https://aistudio.google.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[9px] text-indigo-400 hover:text-indigo-300 transition-colors inline-flex items-center gap-1"
-                          >
-                            Get Key <ExternalLink size={8} />
-                          </a>
-                        </div>
-                      </div>
+                <div className="space-y-3.5">
+                  {/* Google Gemini Token Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
+                      <span>Google Gemini Key</span>
+                      <span className="text-[9px] text-zinc-600 font-mono font-normal">GEMINI_API_KEY</span>
+                    </label>
+                    <div className="relative">
                       <input
                         type={showKeyText ? "text" : "password"}
                         value={tempGoogleKey}
                         onChange={(e) => setTempGoogleKey(e.target.value)}
-                        onBlur={(e) => setTempGoogleKey(e.target.value.trim())}
                         placeholder="AIzaSy..."
-                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-indigo-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
+                        className="w-full bg-[#060607] border border-white/[0.04] focus:border-white/[0.1] rounded-xl px-3.5 py-2 text-xs font-mono text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"
                       />
                     </div>
-                  );
-                })()}
+                  </div>
 
-                {/* Anthropic */}
-                {(() => {
-                  const hasKey = clientAnthropicKey.length > 0;
-                  const isModified = tempAnthropicKey !== clientAnthropicKey && tempAnthropicKey.trim() !== "";
-                  
-                  const getStatusColor = () => {
-                    if (isModified) return 'amber-600';
-                    if (hasKey) return 'amber-500/30';
-                    return 'white/5';
-                  };
-                  
-                  const getStatusBorder = () => {
-                    if (isModified) return 'border-amber-500/50';
-                    if (hasKey) return 'border-amber-500/20';
-                    return 'border-white/10';
-                  };
-                  
-                  return (
-                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-amber-400" />
-                          <div>
-                            <h4 className="text-sm font-semibold text-amber-300">Anthropic Claude</h4>
-                            <p className="text-[10px] text-zinc-500">Thoughtful reasoning (BYOK)</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                          <a
-                            href="https://console.anthropic.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[9px] text-amber-400 hover:text-amber-300 transition-colors inline-flex items-center gap-1"
-                          >
-                            Get Key <ExternalLink size={8} />
-                          </a>
-                        </div>
-                      </div>
-                      <input
-                        type={showKeyText ? "text" : "password"}
-                        value={tempAnthropicKey}
-                        onChange={(e) => setTempAnthropicKey(e.target.value)}
-                        onBlur={(e) => setTempAnthropicKey(e.target.value.trim())}
-                        placeholder="sk-ant-..."
-                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-amber-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
-                      />
-                    </div>
-                  );
-                })()}
+                  {/* Anthropic Claude Token Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
+                      <span>Anthropic Claude Key</span>
+                      <span className="text-[9px] text-zinc-600 font-mono font-normal">ANTHROPIC_API_KEY</span>
+                    </label>
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempAnthropicKey}
+                      onChange={(e) => setTempAnthropicKey(e.target.value)}
+                      placeholder="sk-ant-..."
+                      className="w-full bg-[#060607] border border-white/[0.04] focus:border-white/[0.1] rounded-xl px-3.5 py-2 text-xs font-mono text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"
+                    />
+                  </div>
 
-                {/* OpenAI */}
-                {(() => {
-                  const hasKey = clientOpenaiKey.length > 0;
-                  const isModified = tempOpenaiKey !== clientOpenaiKey && tempOpenaiKey.trim() !== "";
-                  
-                  const getStatusColor = () => {
-                    if (isModified) return 'emerald-600';
-                    if (hasKey) return 'emerald-500/30';
-                    return 'white/5';
-                  };
-                  
-                  const getStatusBorder = () => {
-                    if (isModified) return 'border-emerald-500/50';
-                    if (hasKey) return 'border-emerald-500/20';
-                    return 'border-white/10';
-                  };
-                  
-                  return (
-                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                          <div>
-                            <h4 className="text-sm font-semibold text-emerald-300">OpenAI GPT</h4>
-                            <p className="text-[10px] text-zinc-500">Powerful & multimodal (BYOK)</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                          <a
-                            href="https://platform.openai.com/api-keys"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[9px] text-emerald-400 hover:text-emerald-300 transition-colors inline-flex items-center gap-1"
-                          >
-                            Get Key <ExternalLink size={8} />
-                          </a>
-                        </div>
-                      </div>
-                      <input
-                        type={showKeyText ? "text" : "password"}
-                        value={tempOpenaiKey}
-                        onChange={(e) => setTempOpenaiKey(e.target.value)}
-                        onBlur={(e) => setTempOpenaiKey(e.target.value.trim())}
-                        placeholder="sk-..."
-                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-emerald-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
-                      />
-                    </div>
-                  );
-                })()}
+                  {/* OpenAI Token Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
+                      <span>OpenAI Token Key</span>
+                      <span className="text-[9px] text-zinc-600 font-mono font-normal">OPENAI_API_KEY</span>
+                    </label>
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempOpenaiKey}
+                      onChange={(e) => setTempOpenaiKey(e.target.value)}
+                      placeholder="sk-proj-..."
+                      className="w-full bg-[#060607] border border-white/[0.04] focus:border-white/[0.1] rounded-xl px-3.5 py-2 text-xs font-mono text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"
+                    />
+                  </div>
 
-                {/* OpenRouter */}
-                {(() => {
-                  const hasKey = clientOpenrouterKey.length > 0;
-                  const isModified = tempOpenrouterKey !== clientOpenrouterKey && tempOpenrouterKey.trim() !== "";
-                  
-                  const getStatusColor = () => {
-                    if (isModified) return 'purple-600';
-                    if (hasKey) return 'purple-500/30';
-                    return 'white/5';
-                  };
-                  
-                  const getStatusBorder = () => {
-                    if (isModified) return 'border-purple-500/50';
-                    if (hasKey) return 'border-purple-500/20';
-                    return 'border-white/10';
-                  };
-                  
-                  return (
-                    <div className={`bg-${getStatusColor()} border ${getStatusBorder()} rounded-2xl p-4 transition-all`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-purple-400" />
-                          <div>
-                            <h4 className="text-sm font-semibold text-purple-300">OpenRouter</h4>
-                            <p className="text-[10px] text-zinc-500">Free programming models</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {hasKey && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                          <a
-                            href="https://openrouter.ai/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[9px] text-purple-400 hover:text-purple-300 transition-colors inline-flex items-center gap-1"
-                          >
-                            Get Key <ExternalLink size={8} />
-                          </a>
-                        </div>
-                      </div>
-                      <input
-                        type={showKeyText ? "text" : "password"}
-                        value={tempOpenrouterKey}
-                        onChange={(e) => setTempOpenrouterKey(e.target.value)}
-                        onBlur={(e) => setTempOpenrouterKey(e.target.value.trim())}
-                        placeholder="sk-or-..."
-                        className="w-full bg-[#070709]/50 border border-white/[0.08] focus:border-purple-500/50 focus:bg-white/[0.02] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 outline-none font-mono transition-all"
-                      />
-                    </div>
-                  );
-                })()}
-              </div>
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-white/[0.05] pt-4 flex-shrink-0">
-                <div className="flex items-center justify-between mb-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowKeyText(!showKeyText)}
-                    className="text-zinc-500 hover:text-zinc-300 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1.5 transition-colors"
-                  >
-                    <Eye size={12} />
-                    <span>{showKeyText ? "Hide Keys" : "Show Keys"}</span>
-                  </button>
-                  <span className="text-[9px] text-zinc-600 font-mono">🔐 Encrypted locally</span>
+                  {/* OpenRouter Token Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
+                      <span>OpenRouter Key</span>
+                      <span className="text-[9px] text-zinc-600 font-mono font-normal">OPENROUTER_API_KEY</span>
+                    </label>
+                    <input
+                      type={showKeyText ? "text" : "password"}
+                      value={tempOpenrouterKey}
+                      onChange={(e) => setTempOpenrouterKey(e.target.value)}
+                      placeholder="sk-or-v1-..."
+                      className="w-full bg-[#060607] border border-white/[0.04] focus:border-white/[0.1] rounded-xl px-3.5 py-2 text-xs font-mono text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"
+                    />
+                  </div>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-end gap-3">
+              {/* Modal Control Strip Action Row */}
+              <div className="px-5 py-3.5 bg-[#101013]/40 border-t border-white/[0.02] flex items-center justify-between select-none">
+                <button
+                  onClick={() => setShowKeyText(!showKeyText)}
+                  className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300 transition-colors flex items-center gap-1.5 py-1 px-2"
+                >
+                  <Eye size={12} className="opacity-70" />
+                  <span>{showKeyText ? "Obscure Secrets" : "Reveal Plaintext"}</span>
+                </button>
+                
+                <div className="flex gap-2">
                   <button
                     onClick={() => setIsKeyModalOpen(false)}
-                    className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+                    className="py-1.5 px-3.5 rounded-xl border border-white/[0.02] hover:bg-white/[0.03] text-xs font-semibold text-neutral-400 hover:text-neutral-200 transition-all"
                   >
-                    Cancel
+                    Dismiss
                   </button>
                   <button
-                    onClick={async () => {
-                      // Update state first
-                      setClientApiKey(tempGoogleKey.trim());
-                      setClientAnthropicKey(tempAnthropicKey.trim());
-                      setClientOpenaiKey(tempOpenaiKey.trim());
-                      setClientOpenrouterKey(tempOpenrouterKey.trim());
-
-                      // Storage sync happens automatically via useEffect hooks
-                      // but we explicitly sync here for immediate feedback
-                      try {
-                        if (tempGoogleKey.trim()) {
-                          await storageManager.setCredential(AIProvider.GOOGLE, tempGoogleKey.trim());
-                        } else {
-                          await storageManager.removeCredential(AIProvider.GOOGLE);
-                        }
-
-                        if (tempAnthropicKey.trim()) {
-                          await storageManager.setCredential(AIProvider.ANTHROPIC, tempAnthropicKey.trim());
-                        } else {
-                          await storageManager.removeCredential(AIProvider.ANTHROPIC);
-                        }
-
-                        if (tempOpenaiKey.trim()) {
-                          await storageManager.setCredential(AIProvider.OPENAI, tempOpenaiKey.trim());
-                        } else {
-                          await storageManager.removeCredential(AIProvider.OPENAI);
-                        }
-
-                        if (tempOpenrouterKey.trim()) {
-                          await storageManager.setCredential(AIProvider.OPENROUTER, tempOpenrouterKey.trim());
-                        } else {
-                          await storageManager.removeCredential(AIProvider.OPENROUTER);
-                        }
-                      } catch (error) {
-                        console.error("[v0] Failed to save keys:", error);
-                        showNotification("Failed to save vault", "error");
-                        return;
-                      }
-
+                    onClick={() => {
+                      setClientApiKey(tempGoogleKey);
+                      setClientAnthropicKey(tempAnthropicKey);
+                      setClientOpenaiKey(tempOpenaiKey);
+                      setClientOpenrouterKey(tempOpenrouterKey);
                       setIsKeyModalOpen(false);
-                      showNotification("Vault saved securely!", "success");
+                      showNotification("API secrets securely synced.", "success");
                     }}
-                    className="px-5 py-2 bg-white hover:bg-gray-100 text-zinc-900 font-bold text-xs rounded-lg transition-all shadow-md active:scale-95"
+                    className="py-1.5 px-3.5 rounded-xl bg-neutral-100 hover:bg-white text-neutral-950 text-xs font-semibold shadow-md transition-all active:scale-95"
                   >
                     Save Keys
                   </button>
@@ -2357,13 +1715,12 @@ export default function Home() {
                 ? "bg-emerald-400 animate-pulse" 
                 : notification.type === "error" 
                 ? "bg-rose-400 animate-pulse" 
-                : "bg-indigo-400 animate-pulse"
+                : "bg-zinc-400 animate-pulse"
             }`} />
-            <span className="text-xs font-bold tracking-tight">{notification.message}</span>
+            <span className="text-xs font-medium tracking-wide">{notification.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
