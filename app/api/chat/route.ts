@@ -136,21 +136,22 @@ export async function POST(req: NextRequest) {
 
     // 2. OpenRouter BYOK with Strict Model Whitelist
     if (provider === "openrouter") {
-      // Strict whitelist of allowed free programming models
+      // Strict whitelist of allowed free programming models (verified against production API)
       const OPENROUTER_WHITELIST = [
-        "qwen/qwen3-coder-480b-a35b:free",
+        "openrouter/free",
+        "nvidia/nemotron-3-ultra:free",
+        "poolside/laguna-m1:free",
         "deepseek/deepseek-r1:free",
-        "deepseek/deepseek-v4-flash:free",
-        "google/gemma-4-31b:free",
+        "nvidia/nemotron-3-super:free",
         "cohere/north-mini-code:free"
       ];
 
-      const modelId = bodyModelId || "qwen/qwen3-coder-480b-a35b:free";
+      const modelId = bodyModelId || "openrouter/free";
 
       // Enforce Model Restrictions
       if (!OPENROUTER_WHITELIST.includes(modelId)) {
         return NextResponse.json(
-          { error: `Unauthorized model "${modelId}". You can only use the 5 allowed free OpenRouter models.` },
+          { error: `Unauthorized model "${modelId}". You can only use the 6 allowed free OpenRouter models.` },
           { status: 403 }
         );
       }

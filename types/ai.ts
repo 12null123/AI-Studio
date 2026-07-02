@@ -116,13 +116,31 @@ export const SUPPORTED_MODELS: ModelConfig[] = [
     supportsThinking: false,
     byokRequired: true
   },
-  // OpenRouter Free Models
+  // OpenRouter Free Models (verified against production API)
   {
-    id: 'qwen/qwen3-coder-480b-a35b:free',
-    name: 'Qwen3 Coder 480B (Free)',
+    id: 'openrouter/free',
+    name: 'OpenRouter Free Auto-Router',
     provider: 'openrouter',
     contextWindow: 32000,
-    capabilities: ['Coding', 'Fast'],
+    capabilities: ['General', 'Fast', 'Auto-Fallback'],
+    supportsThinking: false,
+    byokRequired: true
+  },
+  {
+    id: 'nvidia/nemotron-3-ultra:free',
+    name: 'NVIDIA: Nemotron 3 Ultra (Free)',
+    provider: 'openrouter',
+    contextWindow: 131072,
+    capabilities: ['Reasoning', 'Programming', 'Finance'],
+    supportsThinking: true,
+    byokRequired: true
+  },
+  {
+    id: 'poolside/laguna-m1:free',
+    name: 'Poolside: Laguna M.1 (Free)',
+    provider: 'openrouter',
+    contextWindow: 65536,
+    capabilities: ['Coding', 'Agentic'],
     supportsThinking: false,
     byokRequired: true
   },
@@ -130,35 +148,26 @@ export const SUPPORTED_MODELS: ModelConfig[] = [
     id: 'deepseek/deepseek-r1:free',
     name: 'DeepSeek R1 (Free)',
     provider: 'openrouter',
-    contextWindow: 32000,
-    capabilities: ['Reasoning', 'Debug'],
-    supportsThinking: false,
+    contextWindow: 163840,
+    capabilities: ['Reasoning', 'Debug', 'Deep-Thinking'],
+    supportsThinking: true,
     byokRequired: true
   },
   {
-    id: 'deepseek/deepseek-v4-flash:free',
-    name: 'DeepSeek V4 Flash (Free)',
+    id: 'nvidia/nemotron-3-super:free',
+    name: 'NVIDIA: Nemotron 3 Super (Free)',
     provider: 'openrouter',
-    contextWindow: 32000,
-    capabilities: ['Fast', 'General'],
-    supportsThinking: false,
-    byokRequired: true
-  },
-  {
-    id: 'google/gemma-4-31b:free',
-    name: 'Gemma 4 31B (Free)',
-    provider: 'openrouter',
-    contextWindow: 32000,
-    capabilities: ['Docs', 'General'],
+    contextWindow: 65536,
+    capabilities: ['Academia', 'General', 'Programming'],
     supportsThinking: false,
     byokRequired: true
   },
   {
     id: 'cohere/north-mini-code:free',
-    name: 'North Mini Code (Free)',
+    name: 'Cohere: North Mini Code (Free)',
     provider: 'openrouter',
     contextWindow: 16000,
-    capabilities: ['CLI', 'Terminal'],
+    capabilities: ['CLI', 'Terminal', 'Coding'],
     supportsThinking: false,
     byokRequired: true
   }
