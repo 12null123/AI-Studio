@@ -281,8 +281,29 @@ export default function Home() {
     return `${(kb / 1024).toFixed(1)} MB`;
   };
 
+  const toggleThinkingMode = () => {
+    const newThinking = !useThinking;
+    setUseThinking(newThinking);
+    if (newThinking) {
+      if (activeProvider === 'google') setActiveModelId("gemini-3.1-pro-preview");
+      else if (activeProvider === 'anthropic') setActiveModelId("claude-fable-5");
+      else if (activeProvider === 'openai') setActiveModelId("gpt-5.5-pro");
+    } else {
+      if (activeProvider === 'google') setActiveModelId("gemini-3.5-flash");
+      else if (activeProvider === 'anthropic') setActiveModelId("claude-sonnet-5");
+      else if (activeProvider === 'openai') setActiveModelId("gpt-5.5");
+    }
+  };
+
   // Get active model display name
   const getActiveModelName = () => {
+    const providerConfig = PROVIDER_CONFIG[activeProvider];
+    if (providerConfig) {
+      const model = providerConfig.models.find(m => m.id === activeModelId);
+      if (model) return model.name;
+    }
+    
+    // Fallbacks
     if (activeProvider === "google") {
       return useThinking ? "Gemini 3.1 Pro" : "Gemini 3.5 Flash";
     }
@@ -1390,7 +1411,10 @@ export default function Home() {
                                 setActiveProvider(provider);
                                 const firstModel = config.models[0];
                                 setActiveModelId(firstModel.id);
+                                setUseSearch(false);
                                 if (firstModel.supportsThinking) {
+                                  setUseThinking(true);
+                                } else {
                                   setUseThinking(false);
                                 }
                               }
@@ -1462,7 +1486,10 @@ export default function Home() {
                             key={model.id}
                             onClick={() => {
                               setActiveModelId(model.id);
+                              setUseSearch(false);
                               if (model.supportsThinking) {
+                                setUseThinking(true);
+                              } else {
                                 setUseThinking(false);
                               }
                               setIsModelDropdownOpen(false);
@@ -1487,28 +1514,21 @@ export default function Home() {
                         );
                       })}
 
-                      {/* Thinking Mode Toggle for Google */}
-                      {activeProvider === 'google' && (
-                        <div className="mt-3 pt-2 border-t border-white/[0.02]">
-                          <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.02] cursor-pointer transition-all">
-                            <input
-                              type="checkbox"
-                              checked={useThinking}
-                              onChange={(e) => {
-                                setUseThinking(e.target.checked);
-                                if (e.target.checked) {
-                                  setActiveModelId("gemini-3.1-pro-preview");
-                                } else {
-                                  setActiveModelId("gemini-3.5-flash");
-                                }
-                              }}
-                              className="w-3.5 h-3.5 rounded border-zinc-600 text-indigo-500 focus:ring-0 cursor-pointer"
-                            />
-                            <span className="text-xs text-zinc-300 font-medium">Extended Thinking</span>
-                            <span className="text-[9px] text-zinc-600 ml-auto">Slow but Deep</span>
-                          </label>
-                        </div>
-                      )}
+                      {/* Thinking Mode Toggle */}
+                      <div className="mt-3 pt-2 border-t border-white/[0.02]">
+                        <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.02] cursor-pointer transition-all">
+                          <input
+                            type="checkbox"
+                            checked={useThinking}
+                            onChange={(e) => {
+                              toggleThinkingMode();
+                            }}
+                            className="w-3.5 h-3.5 rounded border-zinc-600 text-indigo-500 focus:ring-0 cursor-pointer"
+                          />
+                          <span className="text-xs text-zinc-300 font-medium">Extended Thinking</span>
+                          <span className="text-[9px] text-zinc-600 ml-auto">Slow but Deep</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -1519,28 +1539,22 @@ export default function Home() {
           <div className="flex items-center gap-4">
             {/* Grounding & Thinking State indicator lamps */}
             <div className="hidden sm:flex items-center gap-2">
-              {activeProvider === "google" ? (
-                <button
-                  onClick={() => {
-                    const newThinking = !useThinking;
-                    setUseThinking(newThinking);
-                    if (newThinking) {
-                      setActiveModelId("gemini-3.1-pro-preview");
-                    } else {
-                      setActiveModelId("gemini-3.5-flash");
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
-                    useThinking
-                      ? "bg-purple-950/20 border-purple-500/20 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.08)]"
-                      : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                  }`}
-                  title="Toggle Deep Thinking Mode (Gemini 3.1 Pro)"
-                >
-                  <Sparkles size={11} className={useThinking ? "text-purple-400" : ""} />
-                  <span>Thinking</span>
-                </button>
-              ) : (
+              <button
+                onClick={() => {
+                  toggleThinkingMode();
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                  useThinking
+                    ? "bg-purple-950/20 border-purple-500/20 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.08)]"
+                    : "bg-white/[0.015] border-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                }`}
+                title="Toggle Deep Thinking Mode"
+              >
+                <Sparkles size={11} className={useThinking ? "text-purple-400" : ""} />
+                <span>Thinking</span>
+              </button>
+              
+              {activeProvider !== "google" && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/[0.03] bg-white/[0.015] text-zinc-500">
                   <span>BYOK Active</span>
                 </div>
@@ -1867,12 +1881,8 @@ export default function Home() {
                    onChange={(e) => setInput(e.target.value)}
                    onKeyDown={handleKeyDown}
                    onPaste={handlePaste}
-                   placeholder={activeProvider === "google" ? (useThinking ? "Ask Gemini 3.1 Pro (Thinking Mode Enabled)..." : "Ask Gemini 3.5 Flash...") : activeProvider === "anthropic" ? "Ask Claude 3.7 Sonnet..." : "Ask GPT-4o..."}
-                    data-dummy={
-                     useThinking 
-                       ? "Ask Gemini 3.1 Pro (Thinking Mode Enabled)..." 
-                       : "Ask Gemini 3.5 Flash..."
-                   }
+                   placeholder={`Ask ${getActiveModelName()}...`}
+                   data-dummy={`Ask ${getActiveModelName()}...`}
                    className="flex-1 bg-transparent border-0 resize-none outline-none text-neutral-200 text-sm py-1 placeholder-neutral-650 min-h-[24px] max-h-[200px] leading-relaxed"
                  />
                </div>
@@ -1898,30 +1908,32 @@ export default function Home() {
                     {/* Thinking Mode Switch Button */}
                    <button
                      onClick={() => {
-                       setUseThinking(!useThinking);
+                       toggleThinkingMode();
                      }}
                      className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
                        useThinking
                          ? "bg-purple-950/40 text-purple-300 border border-purple-800/40 shadow-[0_0_8px_rgba(168,85,247,0.1)]"
                          : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
                      }`}
-                     title="Thinking Mode (Gemini 3.1 Pro)"
+                     title="Thinking Mode"
                    >
                      <Sparkles size={14} />
                    </button>
-                   <button
-                     onClick={() => {
-                       setUseSearch(!useSearch);
-                     }}
-                     className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
-                       useSearch
-                         ? "bg-blue-950/40 text-blue-300 border border-blue-800/40 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
-                         : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
-                     }`}
-                     title="Search Grounding"
-                   >
-                     <Globe size={14} />
-                   </button>
+                   {activeProvider === "google" && activeModelId === "gemini-3.5-flash" && (
+                     <button
+                       onClick={() => {
+                         setUseSearch(!useSearch);
+                       }}
+                       className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
+                         useSearch
+                           ? "bg-blue-950/40 text-blue-300 border border-blue-800/40 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
+                           : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
+                       }`}
+                       title="Search Grounding"
+                     >
+                       <Globe size={14} />
+                     </button>
+                   )}
                    <button
                      onClick={() => setIsKeyModalOpen(true)}
                      className={`p-2 rounded-full transition-all flex items-center justify-center active:scale-95 ${
@@ -1944,7 +1956,7 @@ export default function Home() {
                       </span>
                     </div>
                   )}
-                  {useSearch && (
+                  {useSearch && activeProvider === "google" && activeModelId === "gemini-3.5-flash" && (
                     <div className="hidden sm:flex items-center gap-1 pl-1">
                       <span className="text-[9px] font-bold text-blue-400 bg-blue-950/20 border border-blue-800/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
                         Search Grounding
