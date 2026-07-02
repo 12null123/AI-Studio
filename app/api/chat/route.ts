@@ -181,8 +181,24 @@ export async function POST(req: NextRequest) {
       let parsedError = errorText;
       try {
         const parsed = JSON.parse(errorText);
-        parsedError = parsed.error?.message || parsed.error || errorText;
+        // Sometimes the error is nested deeply, stringify it if it's still an object
+        parsedError = parsed.error?.message || (typeof parsed.error === 'object' ? JSON.stringify(parsed.error) : parsed.error) || errorText;
       } catch {}
+      
+      if (response.status === 429) {
+        return NextResponse.json(
+          { error: `${provider.toUpperCase()} Quota Exceeded. Your custom BYOK key has insufficient funds, hit rate limits, or lacks tier permissions for this model.` },
+          { status: 429 }
+        );
+      }
+      
+      if (response.status === 404) {
+        return NextResponse.json(
+          { error: `${provider.toUpperCase()} Model Not Found. The selected model string may be restricted for your API key tier.` },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json(
         { error: `${provider.toUpperCase()} API Error: ${parsedError}` },
         { status: response.status }
