@@ -134,27 +134,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. OpenRouter BYOK with Strict Model Whitelist
+    // 2. OpenRouter BYOK
     if (provider === "openrouter") {
-      // Strict whitelist of allowed free programming models (verified against production API)
-      const OPENROUTER_WHITELIST = [
-        "openrouter/free",
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "poolside/laguna-m1:free",
-        "deepseek/deepseek-r1:free",
-        "nvidia/nemotron-3-super:free",
-        "cohere/north-mini-code:free"
-      ];
-
       const modelId = bodyModelId || "openrouter/free";
-
-      // Enforce Model Restrictions
-      if (!OPENROUTER_WHITELIST.includes(modelId)) {
-        return NextResponse.json(
-          { error: `Unauthorized model "${modelId}". You can only use the 6 allowed free OpenRouter models.` },
-          { status: 403 }
-        );
-      }
 
       if (!userApiKey) {
         return NextResponse.json(
@@ -172,7 +154,7 @@ export async function POST(req: NextRequest) {
         content: m.content || ""
       }));
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch("[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${userApiKey}`,
@@ -298,12 +280,12 @@ export async function POST(req: NextRequest) {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
 
     if (provider === "anthropic") {
-      targetUrl = "https://api.anthropic.com/v1/messages";
+      targetUrl = "[https://api.anthropic.com/v1/messages](https://api.anthropic.com/v1/messages)";
       headers["x-api-key"] = userApiKey;
       headers["anthropic-version"] = "2023-06-01";
       (payload as any).stream = true;
     } else if (provider === "openai") {
-      targetUrl = "https://api.openai.com/v1/chat/completions";
+      targetUrl = "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)";
       headers["Authorization"] = `Bearer ${userApiKey}`;
       (payload as any).stream = true;
     }
@@ -319,7 +301,6 @@ export async function POST(req: NextRequest) {
       let parsedError = errorText;
       try {
         const parsed = JSON.parse(errorText);
-        // Sometimes the error is nested deeply, stringify it if it's still an object
         parsedError = parsed.error?.message || (typeof parsed.error === 'object' ? JSON.stringify(parsed.error) : parsed.error) || errorText;
       } catch {}
       

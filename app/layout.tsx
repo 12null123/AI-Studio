@@ -8,8 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Gemini Web Client",
-  description: "A clean, private web client for Google's Gemini models featuring secure key handling and chat history.",
+  title: "Osy Studio",
+  description: "a BYOK studio",
 };
 
 export default function RootLayout({
